@@ -1,0 +1,2230 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>PACE</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0F1C2E">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PACE">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<style>
+  :root{
+    --ink:#0F1C2E; --ink2:#16263B;
+    --surface:#F4F6F9; --card:#FFFFFF; --line:#E2E7EE; --line2:#EEF1F5;
+    --text:#1A2433; --muted:#6B7686; --faint:#9AA4B2;
+    --ok:#1F9D6B; --ok-d:#157A52; --ok-bg:#E7F4EE;
+    --warn:#D9821A; --warn-bg:#FBF0DF;
+    --bad:#C5443B; --bad-bg:#FBEAE8;
+    --accent:#3A6FF0;
+    --num:"SF Mono",ui-monospace,"Roboto Mono",Menlo,Consolas,monospace;
+    --jp:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic","Noto Sans JP",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{overflow-x:clip}
+  html,body{margin:0;padding:0}
+  body{font-family:var(--jp);color:var(--text);background:var(--surface);-webkit-text-size-adjust:100%;line-height:1.5}
+  .num{font-family:var(--num);font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+  .wrap{max-width:760px;margin:0 auto;padding:0 14px 96px}
+
+  /* Header / console */
+  header.console{background:var(--ink);color:#fff;border-radius:0 0 18px 18px;padding:calc(env(safe-area-inset-top,0px) + 14px) 16px 18px;position:sticky;top:0;z-index:30;box-shadow:0 6px 20px rgba(15,28,46,.18)}
+  .console .max{max-width:760px;margin:0 auto}
+  .brand{display:flex;align-items:baseline;gap:10px}
+  .brand h1{font-size:20px;letter-spacing:.18em;margin:0;font-weight:700}
+  .brand .sub{font-size:11px;color:#9fb0c6;letter-spacing:.04em}
+  .brand .month{margin-left:auto;font-size:12px;color:#cdd8e6;background:rgba(255,255,255,.08);padding:3px 9px;border-radius:999px}
+
+  .delta{display:flex;align-items:flex-end;gap:14px;margin-top:12px}
+  .delta .big{font-size:46px;font-weight:700;line-height:1;letter-spacing:-.02em}
+  .delta .lbl{font-size:11px;color:#9fb0c6;letter-spacing:.06em;margin-bottom:4px}
+  .delta .land{font-size:13px;color:#cdd8e6;margin-bottom:6px}
+  .delta .land b{color:#fff;font-weight:600}
+  .pill{font-size:11px;padding:3px 9px;border-radius:999px;font-weight:600;letter-spacing:.03em}
+  .pill.ok{background:var(--ok-bg);color:var(--ok-d)}
+  .pill.warn{background:var(--warn-bg);color:var(--warn)}
+  .pill.bad{background:var(--bad-bg);color:var(--bad)}
+
+  /* meter */
+  .meter{margin-top:14px}
+  .meter .track{height:14px;border-radius:8px;background:rgba(255,255,255,.12);overflow:hidden;display:flex;position:relative}
+  .seg{height:100%;transition:width .5s ease}
+  .seg.actual{background:var(--ok-d)}
+  .seg.plan{background:var(--ok)}
+  .seg.pipe{background:repeating-linear-gradient(45deg,#7fc8a8,#7fc8a8 4px,#9bd6bd 4px,#9bd6bd 8px)}
+  .seg.over{background:var(--warn)}
+  .goalmark{position:absolute;top:-3px;bottom:-3px;width:2px;background:#fff;opacity:.9}
+  .legend{display:flex;flex-wrap:wrap;gap:12px;margin-top:9px;font-size:11px;color:#cdd8e6}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+  .legend .a{background:var(--ok-d)} .legend .p{background:var(--ok)} .legend .q{background:#8fd0b3} .legend .o{background:var(--warn)}
+
+  /* tabs */
+  .tabs{display:flex;gap:6px;margin:16px 0 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+  .tab{flex:0 0 auto;border:1px solid var(--line);background:var(--card);color:var(--muted);padding:9px 14px;border-radius:999px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+  .tab.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+
+  /* cards */
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+  .card h2{font-size:13px;margin:0 0 10px;letter-spacing:.04em;color:var(--text);display:flex;align-items:center;gap:8px}
+  .card h2 .tag{font-size:10px;color:var(--muted);font-weight:600;background:var(--line2);padding:2px 7px;border-radius:6px;letter-spacing:.02em}
+
+  /* stat grid */
+  .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+  .stat{background:var(--surface);border-radius:10px;padding:10px 12px}
+  .stat .k{font-size:11px;color:var(--muted)}
+  .stat .v{font-size:22px;font-weight:700;margin-top:2px}
+  .stat .v small{font-size:12px;color:var(--faint);font-weight:600;margin-left:2px}
+  .stat.good .v{color:var(--ok-d)} .stat.bad .v{color:var(--bad)}
+
+  /* day table */
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line2)}
+  th{font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.03em}
+  td.r,th.r{text-align:right}
+  tr.wknd td{background:#fbfcfe}
+  .vchips{color:var(--faint);font-size:11px}
+  .daygoal{font-weight:700}
+  tfoot td{font-weight:700;border-top:2px solid var(--line);border-bottom:none}
+
+  /* output text */
+  .outbox{position:relative}
+  pre.out{white-space:pre-wrap;word-break:break-word;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;font-family:var(--jp);font-size:13px;line-height:1.7;margin:0;max-height:60vh;overflow:auto}
+  .copybar{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+
+  /* forms */
+  label.f{display:block;font-size:11px;color:var(--muted);margin:0 0 4px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+  .row.three{grid-template-columns:1fr 1fr 1fr}
+  input,select,textarea{width:100%;min-width:0;max-width:100%;font-family:var(--jp);font-size:14px;border:1px solid var(--line);border-radius:9px;padding:9px 10px;background:#fff;color:var(--text)}
+  .row>div,.row.three>div{min-width:0}
+  input[type=date],input[type=month]{-webkit-appearance:none;appearance:none}
+  input.num,select.num{font-family:var(--num)}
+  textarea{font-family:var(--num);font-size:12px;line-height:1.5;min-height:240px;white-space:pre}
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:0;border-color:var(--accent)}
+
+  button{font-family:var(--jp);cursor:pointer;border:none;border-radius:9px;font-size:13px;font-weight:600;padding:9px 14px}
+  .btn{background:var(--ink);color:#fff}
+  .btn.sec{background:#fff;color:var(--text);border:1px solid var(--line)}
+  .btn.ok{background:var(--ok);color:#fff}
+  .btn.sm{padding:6px 10px;font-size:12px}
+  .btn.block{width:100%}
+  .btn:active{transform:translateY(1px)}
+  .btn[disabled]{opacity:.45;cursor:default}
+
+  /* actuals list */
+  .alist{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+  .arow{display:flex;align-items:center;gap:8px;background:var(--surface);border-radius:9px;padding:7px 10px;font-size:13px}
+  .arow .d{color:var(--muted);width:78px}
+  .arow .t{font-weight:700;margin-left:auto}
+  .arow .wd{font-size:11px;color:var(--faint)}
+  .arow .x{background:none;color:var(--faint);padding:2px 6px;font-size:16px;line-height:1}
+  .arow.drow{flex-wrap:wrap}
+  .arow .din{display:inline-flex;align-items:center;gap:3px;color:var(--muted);font-size:12px}
+  .arow .din.first{margin-left:auto}
+  .arow .din input{width:60px;padding:4px 6px;font-size:13px;text-align:right}
+  .arow .bdot{color:var(--ok);font-size:9px;margin-left:5px;vertical-align:middle}
+
+  .note{font-size:12px;color:var(--muted);line-height:1.6}
+  .note.warn{background:var(--warn-bg);border:1px solid #f0d8ad;border-radius:10px;padding:10px 12px;color:#8a560f}
+  .note.bad{background:var(--bad-bg);border:1px solid #f0c4bf;border-radius:10px;padding:10px 12px;color:#8f2f28}
+  .note.ok{background:var(--ok-bg);border:1px solid #c5e6d5;border-radius:10px;padding:10px 12px;color:var(--ok-d)}
+
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:10px 18px;border-radius:999px;font-size:13px;opacity:0;pointer-events:none;transition:.25s;z-index:80}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  .hidden{display:none}
+  .muted{color:var(--muted)}
+  .divider{height:1px;background:var(--line2);margin:12px 0}
+  details summary{cursor:pointer;font-size:12px;color:var(--muted);font-weight:600}
+  @media (max-width:420px){ .delta .big{font-size:40px} .stat .v{font-size:20px} }
+  @media (prefers-reduced-motion:reduce){ .seg{transition:none} .toast{transition:none} }
+  .vedit{border:1px solid var(--line2);border-radius:10px;padding:10px;margin-bottom:8px}
+  .vhead{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}
+  .vhead select{width:auto;padding:5px 8px;font-size:12px}
+  .vhead .x{margin-left:auto;color:var(--bad);font-size:12px;font-weight:600;background:none}
+  .slot{display:flex;align-items:center;gap:6px;margin:4px 0;flex-wrap:wrap}
+  .slot select{width:auto;flex:0 0 70px;padding:6px}
+  .slot input{padding:6px 8px}
+  .slot input.cond{flex:1;min-width:0}
+  .slot input.num{flex:0 0 80px}
+  .slot .unit{font-size:11px;color:var(--muted)}
+  .slot .x{background:none;color:var(--faint);font-size:18px;padding:0 4px}
+  .addv{display:flex;gap:6px;margin-top:8px}
+  .addv input{flex:1}
+  .sgroup{border:1px solid var(--line2);border-radius:10px;padding:8px 10px;margin-bottom:8px}
+  .sgh{font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px;display:flex;gap:8px;align-items:center}
+  .sgh .muted{font-weight:400}
+  .srow{display:flex;align-items:center;gap:8px;padding:4px 0;border-top:1px solid var(--line2)}
+  .srow:first-of-type{border-top:none}
+  .srow .svn{font-size:13px;flex:0 0 auto;max-width:46%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .srow select{flex:1;min-width:0;padding:5px 8px;font-size:12px}
+  .srow .x{margin-left:auto;background:none;color:var(--faint);font-size:18px;padding:0 6px}
+  .scen{display:flex;gap:10px;margin-top:12px}
+  .scol{flex:1;min-width:0;background:rgba(255,255,255,.06);border-radius:12px;padding:10px 12px}
+  .scol.hi{background:rgba(255,255,255,.13)}
+  .scol .lbl{font-size:11px;color:#9fb0c6;letter-spacing:.04em;display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap}
+  .scol .snum{font-size:30px;font-weight:700;line-height:1;letter-spacing:-.02em;color:#fff}
+  .scol .snum.neg{color:#ffd9d4}
+  .scol .sub2{font-size:12px;color:#cdd8e6;margin-top:6px}
+  .scol .sub2 b{color:#fff;font-weight:600}
+  .seg.base{background:var(--ok)} .seg.up{background:#bfe6d2}
+  .legend .b{background:var(--ok)} .legend .u{background:#bfe6d2}
+  .ord{display:inline-flex;gap:2px;vertical-align:middle}
+  .ob{background:#eef2f7;border:1px solid var(--line2);border-radius:6px;font-size:10px;line-height:1;padding:4px 7px;color:var(--muted)}
+  .vhead .ord{margin-right:2px}
+</style>
+</head>
+<body>
+
+<header class="console">
+  <div class="max">
+    <div class="brand">
+      <h1>PACE</h1>
+      <span class="sub">日次目標・着地見込み</span>
+      <span class="month num" id="hMonth">—</span>
+    </div>
+    <div class="scen">
+      <div class="scol">
+        <div class="lbl">現状ペース（ベース）</div>
+        <div class="snum num" id="hBaseDelta">—</div>
+        <div class="sub2">着地 <b class="num" id="hBaseLanding">—</b></div>
+      </div>
+      <div class="scol hi">
+        <div class="lbl">必達 <span class="pill" id="hPill">—</span></div>
+        <div class="snum num" id="hDelta">—</div>
+        <div class="sub2">着地 <b class="num" id="hLanding">—</b> ／ 目標 <b class="num" id="hGoal">—</b></div>
+      </div>
+    </div>
+    <div class="meter">
+      <div class="track" id="track">
+        <div class="seg actual" id="segA" style="width:0"></div>
+        <div class="seg base" id="segBase" style="width:0"></div>
+        <div class="seg up" id="segUp" style="width:0"></div>
+        <div class="seg pipe" id="segQ" style="width:0"></div>
+        <div class="goalmark" id="goalmark" style="left:100%"></div>
+      </div>
+      <div class="legend">
+        <span><i class="a"></i>実績 <b class="num" id="lgA">0</b></span>
+        <span><i class="b"></i>現状計画 <b class="num" id="lgBase">0</b></span>
+        <span id="lgUpWrap"><i class="u"></i>必達上乗せ <b class="num" id="lgUp">0</b></span>
+        <span><i class="q"></i>開通見込 <b class="num" id="lgQ">0</b></span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="tabs" id="tabs">
+    <button class="tab active" data-tab="day">ホーム</button>
+    <button class="tab" data-tab="data">データ入力</button>
+    <button class="tab" data-tab="mgr">責任者展開</button>
+    <button class="tab" data-tab="staff">スタッフ展開</button>
+    <button class="tab" data-tab="hit">必達モード</button>
+    <button class="tab" data-tab="rates">レート編集</button>
+    <button class="tab" data-tab="import">取込・月更新</button>
+    <button class="tab" data-tab="json">JSON</button>
+  </div>
+
+  <!-- DAY -->
+  <section id="view-day">
+    <div class="card">
+      <div class="stats" id="dayStats"></div>
+    </div>
+    <div class="card">
+      <h2>日別の目標件数 <span class="tag">翌日〜月末</span></h2>
+      <div id="dayTableWrap"></div>
+    </div>
+  </section>
+
+  <!-- MANAGER -->
+  <section id="view-mgr" class="hidden">
+    <div class="card">
+      <h2>責任者展開フォーマット <span class="tag">そのままLINE貼付可</span></h2>
+      <div class="copybar">
+        <button class="btn sm" onclick="copyOut('outMgr')">本文をコピー</button>
+      </div>
+      <div class="outbox"><pre class="out" id="outMgr"></pre></div>
+    </div>
+  </section>
+
+  <!-- STAFF -->
+  <section id="view-staff" class="hidden">
+    <div class="card">
+      <h2>スタッフ展開フォーマット <span class="tag">今週・毎日再計算</span></h2>
+      <div class="copybar">
+        <button class="btn sm" onclick="copyOut('outStaff')">本文をコピー</button>
+      </div>
+      <div class="outbox"><pre class="out" id="outStaff"></pre></div>
+    </div>
+  </section>
+
+  <!-- HIT -->
+  <section id="view-hit" class="hidden">
+    <div class="card">
+      <h2>必達モード <span class="tag">平均±許容内で目標到達できるか</span></h2>
+      <div id="hitBody"></div>
+    </div>
+    <div class="card" id="hitOutCard">
+      <h2>必達版・責任者展開 <span class="tag">レートを一律補正</span></h2>
+      <div class="copybar">
+        <button class="btn sm" onclick="copyOut('outHit')">本文をコピー</button>
+      </div>
+      <div class="outbox"><pre class="out" id="outHit"></pre></div>
+    </div>
+  </section>
+
+  <!-- DATA -->
+  <section id="view-data" class="hidden">
+    <div class="card">
+      <h2>日次入力 <span class="tag">実績・見込みを同じ日付で</span></h2>
+      <div class="row three">
+        <div><label class="f">日付</label><input type="date" id="dDate"></div>
+        <div><label class="f">実績件数</label><input class="num" type="number" id="dActual"></div>
+        <div><label class="f">見込み件数</label><input class="num" type="number" id="dForecast"></div>
+      </div>
+      <button class="btn ok block" onclick="addDaily()">この日を保存（実績入力日を基準日に）</button>
+      <p class="note" id="fSum" style="margin-top:8px"></p>
+      <p class="note">実績を保存すると、その日付が自動で基準日になり、累計・残数・必達が更新されます。一覧の確認・修正は下の「実績の一覧」から。</p>
+    </div>
+
+    <div class="card">
+      <h2>基本設定</h2>
+      <div class="row">
+        <div><label class="f">対象月</label><input type="month" id="iMonth"></div>
+        <div><label class="f">基準日（この翌日から計画）</label><input type="date" id="iBasis"></div>
+      </div>
+      <div class="row">
+        <div><label class="f">達成期限（この日までに目標）</label><input type="date" id="iTarget"></div>
+        <div style="display:flex;align-items:flex-end"><span class="note">期限を月末より前にすると、その日までに目標到達する配分になります。</span></div>
+      </div>
+      <div class="row three">
+        <div><label class="f">月間目標（件）</label><input class="num" type="number" id="iGoal"></div>
+        <div><label class="f">許容上振れ α（%）</label><input class="num" type="number" id="iAlpha"></div>
+        <div><label class="f">開通率（%）</label><input class="num" type="number" id="iRate"></div>
+      </div>
+      <div class="divider"></div>
+      <div class="row">
+        <div><label class="f">初期累計実績（件）</label><input class="num" type="number" id="iCarryCum"></div>
+        <div><label class="f">↑の時点（as-of）</label><input type="date" id="iCarryAsOf"></div>
+      </div>
+      <p class="note">初期累計＝この日付の終了時点までの累計実績。以降は上の「日次入力」に積めば自動で累計に加算されます。</p>
+      <button class="btn block" style="margin-top:10px" onclick="applySettings()">設定を反映</button>
+    </div>
+
+    <div class="card">
+      <h2>一覧ページ</h2>
+      <div class="row">
+        <div><button class="btn sec block" onclick="switchTab('schedlist')">予定の一覧・編集 ▸</button></div>
+        <div><button class="btn sec block" onclick="switchTab('actuallist')">実績の一覧・編集 ▸</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SCHEDULE LIST (data sub-page) -->
+  <section id="view-schedlist" class="hidden">
+    <div class="card">
+      <button class="btn sm sec" onclick="switchTab('data')">← データ入力に戻る</button>
+      <h2 style="margin-top:10px">予定（スケジュール） <span class="tag">日付ごとに変更・追加・削除</span></h2>
+      <div class="row three">
+        <div><label class="f">日付</label><input type="date" id="sDate"></div>
+        <div><label class="f">会場</label><select id="sVenue"></select></div>
+        <div><label class="f">条件</label><select id="sCond"></select></div>
+      </div>
+      <button class="btn sec block sm" onclick="addSchedule()">この日にこの会場を追加</button>
+      <p class="note" style="margin-top:8px">下の一覧で、日付ごとに会場の条件変更・削除ができます。条件は会場ごとに自動表示、土日/平日は日付から判定。月まるごとの差し替えは「取込・月更新」へ。<span id="schedCount" class="hidden"></span></p>
+      <div id="schedList" style="margin-top:10px"></div>
+    </div>
+  </section>
+
+  <!-- ACTUALS LIST (data sub-page) -->
+  <section id="view-actuallist" class="hidden">
+    <div class="card">
+      <button class="btn sm sec" onclick="switchTab('data')">← データ入力に戻る</button>
+      <h2 style="margin-top:10px">実績の一覧 <span class="tag">修正・削除</span></h2>
+      <button id="advBasis" class="btn sec block sm hidden" style="margin-top:8px" onclick="advanceBasisToLatest()"></button>
+      <div class="alist" id="dailyList" style="margin-top:8px"></div>
+      <p class="note" id="dailyHint" style="margin-top:6px">各行の数値はその場で修正・削除できます。● 印の日の実績が累計・残数・必達に反映されています（初期累計の翌日〜基準日）。基準日より後に入れた実績は、上のボタンで基準日を進めると反映されます。</p>
+    </div>
+  </section>
+
+  <!-- RATES -->
+  <section id="view-rates" class="hidden">
+    <div class="card">
+      <h2>レート編集 <span class="tag">修正・追加・地域移動</span></h2>
+      <p class="note">1日あたり件数（土日/平日・条件ごと）。変更は即時に日別目標・計画値に反映されます。条件は空欄でもOK。新会場は各地域の「会場」追加から、または「取込」で自動追加されます。</p>
+    </div>
+    <div class="card">
+      <h2>スケジュール条件の同期 <span class="tag">件数が合わない時</span></h2>
+      <p class="note">レート編集で条件名を変えると、スケジュール側の旧表記と一致せず件数が0になることがあります。下のボタンで、各予定の条件を「その会場の現在のレート」に自動で合わせます（1種類しかない日は自動、複数ある日は旧→新表記で対応）。</p>
+      <button class="btn ok block" onclick="fixScheduleConds()">スケジュールの条件をレートに合わせる</button>
+      <p class="note" id="rcMsg" style="margin-top:8px"></p>
+    </div>
+    <div id="ratesBody"></div>
+  </section>
+
+  <!-- IMPORT -->
+  <section id="view-import" class="hidden">
+    <div class="card">
+      <h2>スケジュール取込・月更新 <span class="tag">[ {date, venues:[…]} ] を貼付</span></h2>
+      <p class="note">毎月の予定をいつもの形式のまま貼り付けて取込めます。会場名の括弧（外販有・リスポーン有・リスポーン+催事有）と土日/平日は自動判定。レートは引き継がれ、新しい会場・条件は「レート編集」に0件で追加されるので、そこで数値を入れてください。</p>
+      <div class="row">
+        <div><label class="f">祝日（任意・カンマ区切り YYYY-MM-DD）</label><input id="importHol" placeholder="2026-08-11"></div>
+        <div style="display:flex;align-items:flex-end"><label style="font-size:12px;color:var(--muted)"><input type="checkbox" id="importReset" checked style="width:auto;margin-right:6px">実績・目標もリセット</label></div>
+      </div>
+      <textarea id="importArea" spellcheck="false" placeholder='[ {"date":"2026-08-01","day":"土","venues":["MOP","店舗"]}, ... ]'></textarea>
+      <div class="copybar" style="margin-top:10px"><button class="btn ok" onclick="importSchedule()">スケジュールを取込</button></div>
+      <p class="note" id="importMsg"></p>
+      <div class="divider"></div>
+      <p class="note">来月への移行：①下のボタンで今月のレート＋予定を書き出して保存 → ②来月、JSONタブでそれを読込（レート復元）→ ③このタブに新しい月の予定を貼って取込。</p>
+      <button class="btn sec block" onclick="exportJson()">今月のレート＋予定をJSONで書き出す</button>
+    </div>
+  </section>
+
+  <!-- JSON -->
+  <section id="view-json" class="hidden">
+    <div class="card">
+      <h2>JSON 入出力 <span class="tag">保存・読込はここ</span></h2>
+      <div class="copybar">
+        <button class="btn sm" onclick="loadJuly()">7月データを読込</button>
+        <button class="btn sm sec" onclick="loadSample()">6月例を読込</button>
+        <button class="btn sm sec" onclick="exportJson()">レート＋予定を書き出す</button>
+        <button class="btn sm ok" onclick="importJson()">テキストを読み込む</button>
+        <button class="btn sm sec" onclick="copyOut('jsonArea')">コピー</button>
+      </div>
+      <textarea id="jsonArea" spellcheck="false"></textarea>
+      <p class="note" id="jsonMsg" style="margin-top:8px"></p>
+      <details style="margin-top:10px">
+        <summary>JSONの書き方（スキーマ）</summary>
+        <pre class="out" style="margin-top:8px;font-size:11px">{
+  "month": "2025-06",
+  "goal": 700,
+  "alphaPct": 30,          // 平均から +何% まで上げてよいか
+  "basisDate": "2025-06-22",
+  "carryIn": { "asOf": "2025-06-22", "cum": 367 },
+  "pipeline": { "raw": 28, "ratePct": 80 },
+
+  // 会場マスタ（レート＝1日あたりの件数。土日/平日・条件ごと）
+  "regions": [
+    { "name":"札幌", "category":"外販", "venues":[
+      { "name":"三井", "slots":[ {"day":"土日","cond":"","rate":30} ] },
+      { "name":"アークス菊水", "slots":[
+        {"day":"土日","cond":"リスポーン様あり","rate":3.5},
+        {"day":"平日","cond":"リスポーン様あり","rate":3},
+        {"day":"平日","cond":"リスポーン様なし","rate":1} ] }
+    ]},
+    // 店舗は集計表示（isStore）。storeRate＝6店舗合計の1日件数
+    { "name":"店舗", "category":"店舗", "isStore":true, "storeCount":6, "storeRate":12 }
+  ],
+
+  // 予定：日付×会場×条件（同じ日に複数会場を並べる）
+  "schedule": [
+    {"date":"2025-06-28","venue":"三井","cond":""},
+    {"date":"2025-06-28","venue":"アークス菊水","cond":"リスポーン様あり"},
+    {"date":"2025-06-23","venue":"店舗","cond":""}
+  ],
+
+  // 日次実績（任意・運用しながら追加）
+  "actuals": [ {"date":"2025-06-23","total":18} ]
+}</pre>
+      </details>
+    </div>
+  </section>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===================== Engine ===================== */
+const WK=['日','月','火','水','木','金','土'];
+function parseD(s){const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d);}
+function fmtMD(s){const dt=parseD(s);return(dt.getMonth()+1)+'/'+dt.getDate();}
+function wd(s){return WK[parseD(s).getDay()];}
+let HOLIDAYS=new Set();
+function dayType(s){if(HOLIDAYS.has(s))return'土日';const g=parseD(s).getDay();return(g===0||g===6)?'土日':'平日';}
+const CONDSET=new Set(['外販有','リスポーン有','リスポーン+催事有']);
+function parseToken(t){const m=t.match(/^(.*)\((.+)\)$/);return(m&&CONDSET.has(m[2]))?{venue:m[1],cond:m[2]}:{venue:t,cond:''};}
+function canonCond(venue,cond,dt){
+  if(cond==='外販有')return'外販有';
+  if(cond==='リスポーン有')return'リスポーン有';
+  if(cond==='リスポーン+催事有')return'リスポーン+催事有';
+  if(venue==='メガ')return'外販無';
+  if(venue==='アークス室蘭')return'外販無';
+  if(venue==='アークス菊水'||venue==='ビッグ清田')return'リスポーン無';
+  return'';
+}
+function horizonEnd(D){const me=monthEnd(D.month);const t=D.targetDate;return(t&&t<me)?t:me;}
+function addDays(s,n){const dt=parseD(s);dt.setDate(dt.getDate()+n);return iso(dt);}
+function iso(dt){const y=dt.getFullYear(),m=String(dt.getMonth()+1).padStart(2,'0'),d=String(dt.getDate()).padStart(2,'0');return `${y}-${m}-${d}`;}
+function monthEnd(month){const[y,m]=month.split('-').map(Number);return iso(new Date(y,m,0));}
+function monthStart(month){return month+'-01';}
+function num(n){return Number.isInteger(n)?String(n):String(Math.round(n*100)/100);}
+
+function cumActual(D,basis){
+  let cum=D.carryIn?D.carryIn.cum:0;
+  const asOf=D.carryIn?D.carryIn.asOf:'0000-00-00';
+  for(const a of(D.actuals||[])){if(a.date>asOf&&a.date<=basis)cum+=a.total;}
+  return cum;
+}
+function findVenue(D,name){for(const r of D.regions){for(const v of(r.venues||[])){if(v.name===name)return{r,v};}}return null;}
+function rateFor(D,date,venue,cond){
+  const fv=findVenue(D,venue);if(!fv)return null;
+  const dt=dayType(date);
+  for(const sl of fv.v.slots){if(sl.day===dt&&(sl.cond||'')===(cond||''))return sl.rate;}
+  return null;
+}
+// plan over dates strictly after basis, within month
+function computePlan(D,basis,mult){
+  mult=mult||1;
+  const end=horizonEnd(D);
+  const regions=[];let planTotal=0;
+  for(const r of D.regions){
+    const lines=[];let regionTotal=0;
+    if(r.isStore){
+      const n=D.schedule.filter(e=>e.venue===(r.storeVenue||'店舗')&&e.date>basis&&e.date<=end).length;
+      if(n>0){const rate=r.storeRate*mult;const sub=n*rate;lines.push({store:true,days:n,count:r.storeCount,rate,sub});regionTotal=sub;}
+    }else{
+      for(const v of(r.venues||[])){
+        for(const sl of v.slots){
+          const n=D.schedule.filter(e=>e.venue===v.name&&e.date>basis&&e.date<=end&&dayType(e.date)===sl.day&&(e.cond||'')===(sl.cond||'')).length;
+          if(n>0){const rate=sl.rate*mult;const sub=n*rate;lines.push({venue:v.name,day:sl.day,cond:sl.cond,days:n,rate,sub});regionTotal+=sub;}
+        }
+      }
+    }
+    if(lines.length){regions.push({name:r.name,category:r.category,isStore:!!r.isStore,lines,total:regionTotal});planTotal+=regionTotal;}
+  }
+  return{regions,planTotal};
+}
+// global venue order from rate editor (region order, venues within region, store)
+function venueOrderIndex(D,name){
+  let idx=0;
+  for(const r of D.regions){
+    if(r.isStore){ if((r.storeVenue||'店舗')===name)return idx; idx++; }
+    else { for(const v of (r.venues||[])){ if(v.name===name)return idx; idx++; } }
+  }
+  return 9999;
+}
+// per-day targets (date -> {goal, venues:[{name,rate}]})
+function dayTargets(D,basis){
+  const end=horizonEnd(D);
+  const map={};
+  for(const e of D.schedule){
+    if(!(e.date>basis&&e.date<=end))continue;
+    let rate=null,label=e.venue;
+    const fvIsStore=D.regions.find(r=>r.isStore&&(r.storeVenue||'店舗')===e.venue);
+    if(fvIsStore){rate=fvIsStore.storeRate;label='店舗';}
+    else rate=rateFor(D,e.date,e.venue,e.cond);
+    if(rate==null)continue;
+    if(!map[e.date])map[e.date]={goal:0,venues:[]};
+    map[e.date].goal+=rate;
+    map[e.date].venues.push({name:label,cond:(fvIsStore?'':e.cond),rate});
+  }
+  return Object.keys(map).sort().map(d=>{ map[d].venues.sort((a,b)=>venueOrderIndex(D,a.name)-venueOrderIndex(D,b.name)); return {date:d,...map[d]}; });
+}
+function sumForecasts(D){return (D.forecasts||[]).reduce((a,b)=>a+(b.count||0),0);}
+function pipelineActivated(D){return Math.floor(sumForecasts(D)*D.pipeline.rate);}
+
+function summary(D,basis){
+  const cum=cumActual(D,basis);
+  const plan=computePlan(D,basis);
+  const act=pipelineActivated(D);
+  const landing=cum+plan.planTotal+act;
+  const diff=landing-D.goal;
+  return{cum,planTotal:plan.planTotal,act,landing,diff,plan};
+}
+
+function renderManagerText(D,basis,R){
+  const cum=Math.round(R.cum), remaining=D.goal-cum;
+  const raw=sumForecasts(D), act=R.act, ratePct=Math.round(D.pipeline.rate*100);
+  const nextD=fmtMD(addDays(basis,1));
+  let o='@All\n\n';
+  o+=`■実行計画${num(D.goal)}件\n`;
+  o+=`${fmtMD(horizonEnd(D))} 達成想定\n\n`;
+  if(R.capped)o+=`※全レート+${Math.round(D.alpha*100)}%でも${num(Math.abs(R.diff))}件不足。期限延長／会場日追加／見込み積み増しが必要です。\n\n`;
+  o+=`${fmtMD(basis)}終了時点\n実績${num(cum)}件\n\n`;
+  o+=`${num(D.goal)}件−${num(cum)}件＝残${num(remaining)}件\n\n`;
+  if(raw>0)o+=`見込み${num(raw)}件\n※${ratePct}％の開通率で${act}件\n\n`;
+  const gaiban=R.regions.filter(r=>r.category==='外販');
+  const store=R.regions.filter(r=>r.category==='店舗');
+  const other=R.regions.filter(r=>r.category!=='外販'&&r.category!=='店舗');
+  const block=(r)=>{
+    let s2=`■${r.name}\n\n`;
+    for(const ln of r.lines){
+      if(!ln.subInt)continue;
+      if(ln.store){s2+=`■残${ln.days}日間\n\n・${ln.count}店舗\n${num(ln.rateInt)}件/日＝${num(ln.subInt)}件\n\n`;continue;}
+      const cond=ln.cond?`（${ln.cond}）`:'';
+      s2+=`・${ln.venue}（${ln.day}）残${ln.days}日間${cond}\n${num(ln.rateInt)}件/日＝${num(ln.subInt)}件\n\n`;
+    }
+    s2+=`合計${num(r.totalInt)}件\n\n`; return s2;
+  };
+  if(gaiban.length){o+='【外販】\n\n';gaiban.forEach(r=>o+=block(r));}
+  other.forEach(r=>o+=block(r));
+  if(store.length){o+='【店舗】\n\n';store.forEach(r=>r.lines.forEach(ln=>{if(ln.subInt)o+=`■残${ln.days}日間\n\n・${ln.count}店舗\n${num(ln.rateInt)}件/日＝${num(ln.subInt)}件\n\n`;}));}
+  o+=`総合計${num(R.total)}件\n\n`;
+  o+=`■実行計画${num(D.goal)}件に対して\n\n`;
+  o+=`${fmtMD(basis)}迄の実績：${num(cum)}件\n\n`;
+  o+=`【${nextD}以降の計画値】\n${num(R.total)}件\n\n`;
+  if(raw>0)o+=`【開通見込】\n${act}件\n（${num(raw)}件 × ${ratePct}％）\n\n`;
+  o+=`【最終着地見込み】\n${num(cum)}件＋${num(R.total)}件${raw>0?`＋${act}件`:''}＝${num(R.landing)}件\n\n`;
+  const diffStr=R.diff>0?`+${num(R.diff)}`:R.diff<0?`-${num(Math.abs(R.diff))}`:'±0';
+  o+=`【${num(D.goal)}件に対して】\n${diffStr}件`;
+  return o;
+}
+
+/* week containing basis+1; if that week already passed relative to basis, roll forward */
+function weekRange(basis){
+  let start=addDays(basis,1);               // first planning day
+  const g=parseD(start).getDay();           // 0=Sun..6=Sat ; week = Mon..Sun
+  const back=(g===0)?6:(g-1);
+  start=addDays(start,-back);
+  const end=addDays(start,6);
+  return{start,end};
+}
+function renderStaffText(D,basis,R){
+  const {start,end}=weekRangeClamped(D,basis);
+  const wk=R.days.filter(d=>d.date>=start&&d.date<=end);
+  let weekActual=0;(D.actuals||[]).forEach(a=>{if(a.date>=start&&a.date<=end)weekActual+=a.total;});
+  const weekPlan=wk.reduce((s2,d)=>s2+d.goal,0);
+  const weekTarget=weekActual+weekPlan;
+  const cumAll=Math.round(R.cum), remainAll=D.goal-cumAll;
+  const mLabel=(parseInt((D.month||'').split('-')[1]||'0',10))+'月';
+  let o='@All お疲れ様です。\n\n';
+  o+=`【実行計画（${mLabel}）】\n`;
+  o+=`目標：${num(D.goal)}件\n実績：${num(cumAll)}件\n残り：${num(remainAll)}件\n\n`;
+  o+=`【今週の目標（${fmtMD(start)}〜${fmtMD(end)}）】\n`;
+  o+=`目標：${num(weekTarget)}件\n実績：${num(weekActual)}件\n残り：${num(weekPlan)}件（残り${wk.length}日）\n\n`;
+  o+='■日別の目標\n';
+  wk.forEach(d=>{o+=`${fmtMD(d.date)}（${wd(d.date)}${HOLIDAYS.has(d.date)?'祝':''}）${num(d.goal)}件\n`;});
+  const tmrDate=addDays(basis,1);
+  let tmr=R.days.find(d=>d.date===tmrDate)||R.days[0];
+  if(tmr&&tmr.venues&&tmr.venues.length){
+    o+=`\n■明日（${fmtMD(tmr.date)} ${wd(tmr.date)}${HOLIDAYS.has(tmr.date)?'祝':''}）の拠点別目標\n`;
+    const aggv={}, ord=[];
+    tmr.venues.forEach(v=>{ if(!(v.name in aggv)){aggv[v.name]=0; ord.push(v.name);} aggv[v.name]+=v.rateInt; });
+    ord.forEach(n=>{ o+=`${n} ${num(aggv[n])}件\n`; });
+    o+=`合計 ${num(tmr.goal)}件\n`;
+  }
+  o+='\n一件ずつ積み上げていきましょう！';
+  return o;
+}
+
+/* ===================== State / UI ===================== */
+let D=null;
+
+function normalize(raw){
+  // accept percent-based input, convert to internal
+  const d=JSON.parse(JSON.stringify(raw));
+  d.alpha=(d.alphaPct!=null?d.alphaPct:30)/100;
+  d.pipeline=d.pipeline||{ratePct:100};
+  d.pipeline.rate=(d.pipeline.ratePct!=null?d.pipeline.ratePct:100)/100;
+  d.forecasts=d.forecasts||[];
+  d.regions=d.regions||[];
+  d.schedule=d.schedule||[];
+  d.actuals=d.actuals||[];
+  d.holidays=d.holidays||[];
+  HOLIDAYS=new Set(d.holidays);
+  d.targetDate=d.targetDate||monthEnd(d.month||'2025-06');
+  if(!d.basisDate)d.basisDate=monthStart(d.month||'2025-06');
+  return d;
+}
+function denormalize(d){
+  const out={
+    month:d.month,goal:d.goal,alphaPct:Math.round(d.alpha*100),
+    basisDate:d.basisDate,targetDate:d.targetDate,carryIn:d.carryIn,holidays:d.holidays||[],
+    pipeline:{ratePct:Math.round(d.pipeline.rate*100)},
+    regions:d.regions.map(r=>{const o={name:r.name,category:r.category};if(r.isStore){o.isStore=true;o.storeCount=r.storeCount;o.storeRate=r.storeRate;if(r.storeVenue)o.storeVenue=r.storeVenue;}else{o.venues=r.venues;}return o;}),
+    schedule:d.schedule,actuals:d.actuals,forecasts:d.forecasts||[]
+  };
+  return out;
+}
+
+/* ===== integer apportionment (largest remainder) ===== */
+function apportion(weights,total){
+  total=Math.round(total);
+  const sum=weights.reduce((a,b)=>a+b,0);
+  if(sum<=0||total<=0)return weights.map(()=>0);
+  const raw=weights.map(w=>w/sum*total);
+  const fl=raw.map(x=>Math.floor(x));
+  let rem=total-fl.reduce((a,b)=>a+b,0);
+  const ord=raw.map((x,i)=>[x-Math.floor(x),i]).sort((a,b)=>b[0]-a[0]);
+  for(let j=0;j<rem&&ord.length;j++)fl[ord[j%ord.length][1]]++;
+  return fl;
+}
+function r1(x){return Number.isInteger(x)?String(x):String(Math.round(x*10)/10);}
+function venueLabel(v){return v.name+(v.cond?`（${v.cond}）`:'');}
+function weekRangeClamped(D,basis){
+  let start=addDays(basis,1);
+  const g=parseD(start).getDay(); const back=(g===0)?6:(g-1);
+  start=addDays(start,-back);
+  let end=addDays(start,6);
+  const ms=monthStart(D.month), me=monthEnd(D.month);
+  if(start<ms)start=ms; if(end>me)end=me;
+  return {start,end};
+}
+/* ===== one consistent integer, 必達-based computation ===== */
+function compute(D,basis){
+  const cum=cumActual(D,basis), act=pipelineActivated(D);
+  const target=D.goal-cum-act;
+  const cap=1+(D.alpha||0);
+  const plan=computePlan(D,basis,1);
+  const flat=[]; plan.regions.forEach(r=>r.lines.forEach(l=>flat.push(l)));
+  const realized=k=>flat.reduce((sm,l)=>sm+Math.round(l.rate*k)*l.days,0);
+  const base=realized(1);
+  let k=1, capped=false;
+  if(target>base){
+    let kk=1;
+    while(kk<cap-1e-9 && realized(kk)<target){ kk=Math.round((kk+0.005)*1000)/1000; }
+    if(kk>cap)kk=cap;
+    k=kk; if(realized(k)<target)capped=true;
+  }
+  flat.forEach(l=>{l.rateInt=Math.round(l.rate*k); l.subInt=l.rateInt*l.days;});
+  plan.regions.forEach(r=>{r.totalInt=r.lines.reduce((a,l)=>a+l.subInt,0);});
+  const total=flat.reduce((a,l)=>a+l.subInt,0);
+  const dts=dayTargets(D,basis);
+  const days=dts.map(d=>{
+    const vs=d.venues.map(v=>({name:v.name,cond:v.cond,rate:v.rate,rateInt:Math.round(v.rate*k)}));
+    return {date:d.date, venues:vs, goal:vs.reduce((a,v)=>a+v.rateInt,0)};
+  });
+  const landing=cum+total+act;
+  return {cum,act,base,target,k,capped,total,landing,diff:landing-D.goal,regions:plan.regions,days};
+}
+function renderCore(){
+  if(!D)return;
+  HOLIDAYS=new Set(D.holidays||[]);
+  const basis=D.basisDate;
+  const R=compute(D,basis);
+  document.getElementById('hMonth').textContent=D.month||'';
+  document.getElementById('hGoal').textContent=num(D.goal);
+  // 必達
+  document.getElementById('hLanding').textContent=num(R.landing);
+  const dStr=R.diff>0?`+${num(R.diff)}`:R.diff<0?`−${num(Math.abs(R.diff))}`:'±0';
+  const hD=document.getElementById('hDelta'); hD.textContent=dStr; hD.className='snum num '+(R.diff<0?'neg':'');
+  const pill=document.getElementById('hPill');
+  if(R.diff>=0){pill.className='pill ok';pill.textContent=R.diff===0?'ちょうど':'達成';}
+  else{pill.className='pill bad';pill.textContent='未達';}
+  // 現状（ベース）
+  const cum=Math.round(R.cum);
+  const baseLanding=cum+R.base+R.act, baseDiff=baseLanding-D.goal;
+  document.getElementById('hBaseLanding').textContent=num(baseLanding);
+  const bStr=baseDiff>0?`+${num(baseDiff)}`:baseDiff<0?`−${num(Math.abs(baseDiff))}`:'±0';
+  const hB=document.getElementById('hBaseDelta'); hB.textContent=bStr; hB.className='snum num '+(baseDiff<0?'neg':'');
+  // meter: 実績 + 現状計画 + 必達上乗せ + 開通見込（目標ライン）
+  const up=Math.max(0,R.total-R.base);
+  const denom=Math.max(D.goal,R.landing,1);
+  const pct=v=>Math.max(0,Math.min(100,(v/denom)*100));
+  document.getElementById('segA').style.width=pct(R.cum)+'%';
+  document.getElementById('segBase').style.width=pct(R.base)+'%';
+  document.getElementById('segUp').style.width=pct(up)+'%';
+  document.getElementById('segQ').style.width=pct(R.act)+'%';
+  document.getElementById('goalmark').style.left=pct(D.goal)+'%';
+  document.getElementById('lgA').textContent=num(cum);
+  document.getElementById('lgBase').textContent=num(R.base);
+  document.getElementById('lgUp').textContent=num(up);
+  document.getElementById('lgUpWrap').className=up>0?'':'hidden';
+  document.getElementById('lgQ').textContent=num(R.act);
+  const remaining=D.goal-Math.round(R.cum);
+  const planDays=R.days.length;
+  const needPer=planDays>0?Math.max(0,(D.goal-R.cum-R.act)/planDays):0;
+  document.getElementById('dayStats').innerHTML=
+    statBox('月間目標',num(D.goal),'件')+
+    statBox('累計実績',num(Math.round(R.cum)),'件')+
+    statBox('残数',num(remaining),'件')+
+    statBox('計画値',num(R.total),'件')+
+    statBox('達成期限',fmtMD(horizonEnd(D)),'まで')+
+    statBox('必要日次',num(Math.round(needPer*10)/10),'件/日')+
+    statBox('開通見込',num(R.act),'件')+
+    statBox('着地見込',num(R.landing),'件',R.diff>=0?'good':'bad');
+  renderDayTable(D,basis,R);
+  document.getElementById('outMgr').textContent=renderManagerText(D,basis,R);
+  document.getElementById('outStaff').textContent=renderStaffText(D,basis,R);
+  renderHit(D,basis,R);
+  renderDaily();
+  renderVenueSelect();
+  renderSchedList();
+  save();
+}
+function renderAll(){renderCore();renderRates();}
+function statBox(k,v,u,cls){return `<div class="stat ${cls||''}"><div class="k">${k}</div><div class="v num">${v}<small>${u}</small></div></div>`;}
+
+function renderDayTable(D,basis,R){
+  let total=0;
+  let html='<table><thead><tr><th>日付</th><th>曜</th><th class="r">目標</th><th>会場</th></tr></thead><tbody>';
+  for(const x of R.days){
+    total+=x.goal;
+    const wknd=dayType(x.date)==='土日'?'wknd':'';
+    const chips=x.venues.map(v=>`${v.name}:${num(v.rateInt)}`).join('・');
+    html+=`<tr class="${wknd}"><td class="num">${fmtMD(x.date)}</td><td>${wd(x.date)}${HOLIDAYS.has(x.date)?'<span class="muted"> 祝</span>':''}</td><td class="r daygoal num">${num(x.goal)}</td><td class="vchips">${chips}</td></tr>`;
+  }
+  html+='</tbody><tfoot><tr><td colspan="2">合計</td><td class="r num">'+num(total)+'</td><td></td></tr></tfoot></table>';
+  if(R.days.length===0)html='<p class="note">計画対象日がありません。基準日の翌日〜期限に予定が入っているか確認してください。</p>';
+  document.getElementById('dayTableWrap').innerHTML=html;
+}
+
+function renderHit(D,basis,R){
+  const body=document.getElementById('hitBody'); const outCard=document.getElementById('hitOutCard');
+  if(!body)return;
+  const baseTotal=Math.round(R.base);
+  const up=R.base>0?((R.k-1)*100):0;
+  body.innerHTML=`<div class="stats" style="margin-bottom:10px">`+
+    statBox('ベース計画',num(baseTotal),'件')+
+    statBox('必達補正後',num(R.total),'件',R.diff>=0?'good':'bad')+
+    statBox('一律上振れ',(up>0?'+'+up.toFixed(1):'0')+'%','')+
+    statBox('目標との差',R.diff>0?'+'+num(R.diff):R.diff<0?'−'+num(Math.abs(R.diff)):'±0','件',R.diff>=0?'good':'bad')+
+    `</div>`+
+    (R.capped
+      ? `<div class="note bad">許容上限（全レート+${Math.round(D.alpha*100)}%）まで上げても <b>${num(Math.abs(R.diff))}件</b> 不足します。期限を延ばす／会場日を追加／見込みを積む、のいずれかが必要です。責任者・スタッフ展開はこの上限値で出しています。</div>`
+      : (up>0.05
+        ? `<div class="note ok">全レートを一律 +${up.toFixed(1)}%（許容+${Math.round(D.alpha*100)}%以内）に上げれば期限内に目標到達します。責任者・スタッフ展開はこの必達値で出ています。</div>`
+        : `<div class="note ok">ベース計画だけで目標到達します（余裕 ${num(R.diff)}件）。展開はベース値です。</div>`));
+  if(outCard)outCard.style.display='none';
+}
+
+/* ---- data: actuals ---- */
+function renderDaily(){
+  const el=document.getElementById('dailyList'); if(!el)return;
+  const raw=sumForecasts(D), act=Math.floor(raw*D.pipeline.rate);
+  const sumEl=document.getElementById('fSum');
+  if(sumEl)sumEl.innerHTML=`実績 累計 <b class="num">${num(Math.round(cumActual(D,D.basisDate)))}</b>件 ／ 見込み合計 <b class="num">${num(raw)}</b>件 → 開通率 ${Math.round(D.pipeline.rate*100)}% で <b class="num">${act}</b>件 を着地に加算`;
+  const advBtn=document.getElementById('advBasis');
+  if(advBtn){
+    let latest=''; (D.actuals||[]).forEach(a=>{if(a.date>latest)latest=a.date;});
+    if(latest && latest>D.basisDate){ advBtn.className='btn sec block sm'; advBtn.textContent=`基準日を ${fmtMD(latest)} に進める（残数・必達を再計算）`; }
+    else { advBtn.className='btn sec block sm hidden'; }
+  }
+  const set=new Set(); (D.actuals||[]).forEach(a=>set.add(a.date)); (D.forecasts||[]).forEach(x=>set.add(x.date));
+  const dates=[...set].sort((a,b)=>a<b?1:-1);
+  const asOf=D.carryIn?D.carryIn.asOf:'0000-00-00';
+  if(!dates.length){el.innerHTML='<p class="note">まだ入力がありません。日付と、実績・見込みのどちらか（両方可）を入れて保存してください。数値は下に並び、その場で修正・削除できます。</p>';return;}
+  el.innerHTML=dates.map(d=>{
+    const a=(D.actuals||[]).find(x=>x.date===d); const fc=(D.forecasts||[]).find(x=>x.date===d);
+    const bb=(d>asOf&&d<=D.basisDate)?'<span class="bdot">●</span>':'';
+    return `<div class="arow drow"><span class="d num">${fmtMD(d)} <span class="wd">${wd(d)}</span>${bb}</span>`+
+      `<span class="din first">実<input type="number" inputmode="numeric" value="${a?num(a.total):''}" onchange="setDailyActual('${d}',this.value)"></span>`+
+      `<span class="din">見<input type="number" inputmode="numeric" value="${fc?num(fc.count):''}" onchange="setDailyForecast('${d}',this.value)"></span>`+
+      `<button class="x" onclick="delDaily('${d}')">×</button></div>`;
+  }).join('');
+}
+function addDaily(){
+  const d=document.getElementById('dDate').value; if(!d){toast('日付を入力してください');return;}
+  const av=document.getElementById('dActual').value, fv=document.getElementById('dForecast').value; let any=false, actualSaved=false;
+  if(av!==''&&!isNaN(parseFloat(av))){const t=parseFloat(av);D.actuals=D.actuals||[];const ex=D.actuals.find(x=>x.date===d);if(ex)ex.total=t;else D.actuals.push({date:d,total:t});any=true;actualSaved=true;}
+  if(fv!==''&&!isNaN(parseFloat(fv))){const c=parseFloat(fv);D.forecasts=D.forecasts||[];const ex=D.forecasts.find(x=>x.date===d);if(ex)ex.count=c;else D.forecasts.push({date:d,count:c});any=true;}
+  if(!any){toast('実績か見込みを入力してください');return;}
+  if(actualSaved){ D.basisDate=d; const ib=document.getElementById('iBasis'); if(ib)ib.value=d; }
+  document.getElementById('dActual').value='';document.getElementById('dForecast').value='';
+  renderAll();
+  toast(actualSaved?('保存しました（基準日を'+fmtMD(d)+'に設定）'):'保存しました');
+}
+function delDaily(d){D.actuals=(D.actuals||[]).filter(x=>x.date!==d);D.forecasts=(D.forecasts||[]).filter(x=>x.date!==d);renderAll();}
+function setDailyActual(d,v){
+  v=String(v).trim(); D.actuals=D.actuals||[];
+  if(v===''||isNaN(parseFloat(v))){D.actuals=D.actuals.filter(x=>x.date!==d);}
+  else{const t=parseFloat(v);const ex=D.actuals.find(x=>x.date===d);if(ex)ex.total=t;else D.actuals.push({date:d,total:t});}
+  renderAll();
+}
+function setDailyForecast(d,v){
+  v=String(v).trim(); D.forecasts=D.forecasts||[];
+  if(v===''||isNaN(parseFloat(v))){D.forecasts=D.forecasts.filter(x=>x.date!==d);}
+  else{const c=parseFloat(v);const ex=D.forecasts.find(x=>x.date===d);if(ex)ex.count=c;else D.forecasts.push({date:d,count:c});}
+  renderAll();
+}
+function advanceBasisToLatest(){
+  let latest=''; (D.actuals||[]).forEach(a=>{if(a.date>latest)latest=a.date;});
+  if(!latest){toast('実績がありません');return;}
+  if(latest<=D.basisDate){toast('基準日は最新です');return;}
+  D.basisDate=latest; renderAll(); toast(`基準日を${fmtMD(latest)}に更新`);
+}
+
+
+
+/* ---- data: forecasts (daily 見込み) ---- */
+
+
+
+
+/* ---- data: schedule ---- */
+function renderVenueSelect(){
+  const sel=document.getElementById('sVenue');
+  const cur=sel.value;
+  const names=[];
+  for(const r of D.regions){if(r.isStore){names.push(r.storeVenue||'店舗');}else{for(const v of(r.venues||[]))names.push(v.name);}}
+  sel.innerHTML=names.map(n=>`<option>${n}</option>`).join('');
+  if(names.includes(cur))sel.value=cur;
+  renderCondSelect();
+}
+function renderCondSelect(){
+  const venue=document.getElementById('sVenue').value;
+  const date=document.getElementById('sDate').value;
+  const sel=document.getElementById('sCond');
+  const fv=findVenue(D,venue);
+  let conds=[''];
+  if(fv){
+    const dt=date?dayType(date):null;
+    const set=new Set();
+    for(const sl of fv.v.slots){if(!dt||sl.day===dt)set.add(sl.cond||'');}
+    conds=[...set];
+    if(conds.length===0)conds=[''];
+  }
+  sel.innerHTML=conds.map(c=>`<option value="${c}">${c||'（条件なし）'}</option>`).join('');
+}
+function addSchedule(){
+  const date=document.getElementById('sDate').value;
+  const venue=document.getElementById('sVenue').value;
+  const cond=document.getElementById('sCond').value;
+  if(!date||!venue){toast('日付と会場を選んでください');return;}
+  const dup=D.schedule.find(e=>e.date===date&&e.venue===venue&&(e.cond||'')===(cond||''));
+  if(dup){toast('同じ予定が既にあります');return;}
+  D.schedule.push({date,venue,cond});
+  renderAll();toast('予定を追加しました');
+}
+function renderSchedList(){
+  const el=document.getElementById('schedList'); if(!el)return;
+  const cnt=document.getElementById('schedCount'); if(cnt)cnt.textContent=D.schedule.length;
+  const byDate={};
+  D.schedule.forEach((e,i)=>{(byDate[e.date]=byDate[e.date]||[]).push({e,i});});
+  const dates=Object.keys(byDate).sort();
+  if(!dates.length){el.innerHTML='<p class="note">予定がありません。上で追加するか、「取込」で読み込んでください。</p>';return;}
+  let html='';
+  for(const d of dates){
+    const dt=dayType(d);
+    html+=`<div class="sgroup"><div class="sgh">${fmtMD(d)}（${wd(d)}${HOLIDAYS.has(d)?'祝':''}）<span class="muted">${dt}・${byDate[d].length}件</span></div>`;
+    for(const o of byDate[d]){
+      const e=o.e, i=o.i; const v=findV(e.venue);
+      let condCtl;
+      if(v){
+        const set=new Set(); v.slots.forEach(sl=>{if(sl.day===dt)set.add(sl.cond||'');});
+        let conds=[...set]; if(!conds.length)conds=[''];
+        if(!conds.includes(e.cond||''))conds.unshift(e.cond||'');
+        condCtl=`<select onchange="setSchedCond(${i},this.value)">`+conds.map(c=>`<option value="${(c||'').replace(/"/g,'&quot;')}" ${ (e.cond||'')===c?'selected':''}>${c||'条件なし'}</option>`).join('')+`</select>`;
+      } else {
+        condCtl=`<span class="muted" style="flex:1;font-size:12px">${e.cond||'条件なし'}</span>`;
+      }
+      html+=`<div class="srow"><span class="svn">${e.venue}</span>${condCtl}<button class="x" onclick="delScheduleAt(${i})">×</button></div>`;
+    }
+    html+=`</div>`;
+  }
+  el.innerHTML=html;
+}
+function setSchedCond(i,val){ if(!D.schedule[i])return; D.schedule[i].cond=val; renderAll(); }
+function delScheduleAt(i){ if(!D.schedule[i])return; D.schedule.splice(i,1); renderAll(); }
+
+/* ---- settings ---- */
+function fillSettings(){
+  document.getElementById('iMonth').value=D.month||'';
+  document.getElementById('iBasis').value=D.basisDate||'';
+  document.getElementById('iTarget').value=D.targetDate||'';
+  document.getElementById('iGoal').value=D.goal;
+  document.getElementById('iAlpha').value=Math.round(D.alpha*100);
+  document.getElementById('iRate').value=Math.round(D.pipeline.rate*100);
+  document.getElementById('iCarryCum').value=D.carryIn?D.carryIn.cum:0;
+  document.getElementById('iCarryAsOf').value=D.carryIn?D.carryIn.asOf:'';
+}
+function applySettings(){
+  D.month=document.getElementById('iMonth').value||D.month;
+  D.basisDate=document.getElementById('iBasis').value||D.basisDate;
+  D.targetDate=document.getElementById('iTarget').value||D.targetDate;
+  D.goal=parseFloat(document.getElementById('iGoal').value)||0;
+  D.alpha=(parseFloat(document.getElementById('iAlpha').value)||0)/100;
+  D.pipeline.rate=(parseFloat(document.getElementById('iRate').value)||0)/100;
+  const cum=parseFloat(document.getElementById('iCarryCum').value)||0;
+  const asOf=document.getElementById('iCarryAsOf').value||D.basisDate;
+  D.carryIn={asOf,cum};
+  renderAll();toast('設定を反映しました');
+}
+
+/* ---- JSON ---- */
+function exportJson(){
+  document.getElementById('jsonArea').value=JSON.stringify(denormalize(D),null,2);
+  document.getElementById('jsonMsg').textContent='今月のレート＋予定＋設定を書き出しました。保存しておけば、来月このタブに貼って復元→「取込」で新しい予定に差し替えられます。';
+  switchTab('json');
+}
+function importJson(){
+  const txt=document.getElementById('jsonArea').value.trim();
+  const msg=document.getElementById('jsonMsg');
+  if(!txt){msg.textContent='テキストが空です。';return;}
+  try{
+    const clean=txt.replace(/[\u201C\u201D\u201E\u201F\uFF02]/g,'"').replace(/[\u2018\u2019]/g,"'");
+    const raw=JSON.parse(clean);
+    D=normalize(raw);
+    fillSettings();renderAll();
+    msg.textContent='読み込みました。';toast('JSONを読み込みました');
+  }catch(e){msg.textContent='JSONの形式エラー：'+e.message;}
+}
+
+/* ---- misc ---- */
+function copyOut(id){
+  const el=document.getElementById(id);
+  const text=el.value!==undefined?el.value:el.textContent;
+  navigator.clipboard.writeText(text).then(()=>toast('コピーしました')).catch(()=>{
+    const r=document.createRange();r.selectNodeContents(el);
+    const s=getSelection();s.removeAllRanges();s.addRange(r);
+    try{document.execCommand('copy');toast('コピーしました');}catch(_){toast('コピーできませんでした');}
+    s.removeAllRanges();
+  });
+}
+let toastT;
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),1600);}
+
+function switchTab(name){
+  const activeTab=(name==='schedlist'||name==='actuallist')?'data':name;
+  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===activeTab));
+  const map={day:'view-day',mgr:'view-mgr',staff:'view-staff',hit:'view-hit',rates:'view-rates',import:'view-import',data:'view-data',json:'view-json',schedlist:'view-schedlist',actuallist:'view-actuallist'};
+  Object.values(map).forEach(id=>{const el=document.getElementById(id); if(el)el.classList.add('hidden');});
+  const tgt=document.getElementById(map[name]); if(tgt)tgt.classList.remove('hidden');
+  if(name==='data')fillSettings();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+document.getElementById('tabs').addEventListener('click',e=>{const b=e.target.closest('.tab');if(b)switchTab(b.dataset.tab);});
+document.getElementById('sVenue').addEventListener('change',renderCondSelect);
+document.getElementById('sDate').addEventListener('change',renderCondSelect);
+
+/* ===================== Sample data (June example) ===================== */
+function sampleData(){
+  const sched=[];
+  const add=(date,venue,cond='')=>sched.push({date,venue,cond});
+  for(const d of['2025-06-28','2025-06-29']){add(d,'三井');add(d,'アークス菊水','リスポーン様あり');add(d,'ビッグ清田','リスポーン様あり');add(d,'メガ','外販なし');add(d,'アークス室蘭');}
+  for(const d of['2025-06-23','2025-06-24','2025-06-25','2025-06-26']){add(d,'アークス菊水','リスポーン様あり');add(d,'ビッグ清田','リスポーン様あり');add(d,'メガ','外販あり');}
+  for(const d of['2025-06-27','2025-06-30']){add(d,'アークス菊水','リスポーン様なし');add(d,'ビッグ清田','リスポーン様なし');add(d,'メガ','外販なし');}
+  for(const d of['2025-06-23','2025-06-24','2025-06-25'])add(d,'アークス室蘭','外販あり');
+  for(const d of['2025-06-26','2025-06-27','2025-06-30'])add(d,'アークス室蘭','外販なし');
+  add('2025-06-23','ツルハ');
+  for(const d of['2025-06-23','2025-06-24','2025-06-25','2025-06-26','2025-06-27','2025-06-28','2025-06-29','2025-06-30'])add(d,'店舗');
+  return{
+    month:'2025-06',goal:700,alphaPct:30,basisDate:'2025-06-22',
+    carryIn:{asOf:'2025-06-22',cum:367},
+    pipeline:{raw:28,ratePct:80},
+    regions:[
+      {name:'札幌',category:'外販',venues:[
+        {name:'三井',slots:[{day:'土日',cond:'',rate:30}]},
+        {name:'アークス菊水',slots:[{day:'土日',cond:'リスポーン様あり',rate:3.5},{day:'平日',cond:'リスポーン様あり',rate:3},{day:'平日',cond:'リスポーン様なし',rate:1}]},
+        {name:'ビッグ清田',slots:[{day:'土日',cond:'リスポーン様あり',rate:4},{day:'平日',cond:'リスポーン様あり',rate:4},{day:'平日',cond:'リスポーン様なし',rate:1}]},
+      ]},
+      {name:'苫小牧',category:'外販',venues:[
+        {name:'メガ',slots:[{day:'土日',cond:'外販なし',rate:7},{day:'平日',cond:'外販あり',rate:11},{day:'平日',cond:'外販なし',rate:2}]},
+      ]},
+      {name:'室蘭',category:'外販',venues:[
+        {name:'アークス室蘭',slots:[{day:'土日',cond:'',rate:6},{day:'平日',cond:'外販あり',rate:8},{day:'平日',cond:'外販なし',rate:2}]},
+      ]},
+      {name:'リスポーン',category:'外販',venues:[
+        {name:'ツルハ',slots:[{day:'平日',cond:'',rate:4}]},
+      ]},
+      {name:'店舗',category:'店舗',isStore:true,storeCount:6,storeRate:12},
+    ],
+    schedule:sched,actuals:[]
+  };
+}
+function loadSample(){D=normalize(sampleData());fillSettings();renderAll();toast('6月サンプルを読み込みました');switchTab('day');}
+
+/* ===================== Persistence (localStorage; safe if unavailable) ===================== */
+const LS_KEY='pace_state_v2';
+function save(){try{localStorage.setItem(LS_KEY,JSON.stringify(denormalize(D)));}catch(e){}}
+
+/* ===================== July 2026 data (one-tap load) ===================== */
+function julyData(){
+  return {
+  "month": "2026-07",
+  "goal": 832,
+  "alphaPct": 30,
+  "basisDate": "2026-06-30",
+  "holidays": [
+    "2026-07-20"
+  ],
+  "carryIn": {
+    "asOf": "2026-06-30",
+    "cum": 0
+  },
+  "pipeline": {
+    "raw": 0,
+    "ratePct": 80
+  },
+  "regions": [
+    {
+      "name": "札幌",
+      "category": "外販",
+      "venues": [
+        {
+          "name": "アークス菊水",
+          "slots": [
+            {
+              "day": "土日",
+              "cond": "リスポーン様あり",
+              "rate": 3.5
+            },
+            {
+              "day": "土日",
+              "cond": "リスポーン様なし",
+              "rate": 0.5
+            },
+            {
+              "day": "平日",
+              "cond": "リスポーン様あり",
+              "rate": 5
+            },
+            {
+              "day": "平日",
+              "cond": "リスポーン様なし",
+              "rate": 1
+            }
+          ]
+        },
+        {
+          "name": "ビッグ清田",
+          "slots": [
+            {
+              "day": "土日",
+              "cond": "リスポーン+催事有",
+              "rate": 4
+            },
+            {
+              "day": "土日",
+              "cond": "リスポーン有",
+              "rate": 3
+            },
+            {
+              "day": "平日",
+              "cond": "リスポーン+催事有",
+              "rate": 3
+            },
+            {
+              "day": "平日",
+              "cond": "リスポーン有",
+              "rate": 2
+            },
+            {
+              "day": "平日",
+              "cond": "リスポーン様なし",
+              "rate": 1
+            }
+          ]
+        },
+        {
+          "name": "MOP",
+          "slots": [
+            {
+              "day": "土日",
+              "cond": "",
+              "rate": 25
+            }
+          ]
+        },
+        {
+          "name": "MOP(セブン)",
+          "slots": [
+            {
+              "day": "土日",
+              "cond": "",
+              "rate": 10
+            }
+          ]
+        },
+        {
+          "name": "アーニス",
+          "slots": [
+            {
+              "day": "平日",
+              "cond": "",
+              "rate": 3
+            }
+          ]
+        },
+        {
+          "name": "コープ",
+          "slots": [
+            {
+              "day": "平日",
+              "cond": "",
+              "rate": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "苫小牧",
+      "category": "外販",
+      "venues": [
+        {
+          "name": "メガ",
+          "slots": [
+            {
+              "day": "土日",
+              "cond": "外販あり",
+              "rate": 5
+            },
+            {
+              "day": "土日",
+              "cond": "外販なし",
+              "rate": 4.6
+            },
+            {
+              "day": "平日",
+              "cond": "外販あり",
+              "rate": 5.4
+            },
+            {
+              "day": "平日",
+              "cond": "外販なし",
+              "rate": 1.5
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "室蘭",
+      "category": "外販",
+      "venues": [
+        {
+          "name": "アークス室蘭",
+          "slots": [
+            {
+              "day": "土日",
+              "cond": "",
+              "rate": 2.25
+            },
+            {
+              "day": "平日",
+              "cond": "外販あり",
+              "rate": 2.5
+            },
+            {
+              "day": "平日",
+              "cond": "外販なし",
+              "rate": 1.75
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "リスポーン",
+      "category": "外販",
+      "venues": [
+        {
+          "name": "ツルハ",
+          "slots": [
+            {
+              "day": "土日",
+              "cond": "",
+              "rate": 1.5
+            },
+            {
+              "day": "平日",
+              "cond": "",
+              "rate": 2.6
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "店舗",
+      "category": "店舗",
+      "isStore": true,
+      "storeCount": 6,
+      "storeRate": 6
+    }
+  ],
+  "schedule": [
+    {
+      "date": "2026-07-01",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン様なし"
+    },
+    {
+      "date": "2026-07-01",
+      "venue": "アークス室蘭",
+      "cond": "外販なし"
+    },
+    {
+      "date": "2026-07-01",
+      "venue": "メガ",
+      "cond": "外販なし"
+    },
+    {
+      "date": "2026-07-01",
+      "venue": "店舗",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-02",
+      "venue": "アークス菊水",
+      "cond": "リスポーン様なし"
+    },
+    {
+      "date": "2026-07-02",
+      "venue": "アークス室蘭",
+      "cond": "外販あり"
+    },
+    {
+      "date": "2026-07-02",
+      "venue": "メガ",
+      "cond": "外販あり"
+    },
+    {
+      "date": "2026-07-02",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン様なし"
+    },
+    {
+      "date": "2026-07-02",
+      "venue": "店舗",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-03",
+      "venue": "メガ",
+      "cond": "外販あり"
+    },
+    {
+      "date": "2026-07-03",
+      "venue": "アークス室蘭",
+      "cond": "外販あり"
+    },
+    {
+      "date": "2026-07-03",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン有"
+    },
+    {
+      "date": "2026-07-03",
+      "venue": "アークス菊水",
+      "cond": "リスポーン様なし"
+    },
+    {
+      "date": "2026-07-03",
+      "venue": "ツルハ",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-03",
+      "venue": "店舗",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-04",
+      "venue": "MOP",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-04",
+      "venue": "MOP(セブン)",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-04",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン有"
+    },
+    {
+      "date": "2026-07-04",
+      "venue": "アークス菊水",
+      "cond": "リスポーン様なし"
+    },
+    {
+      "date": "2026-07-04",
+      "venue": "ツルハ",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-04",
+      "venue": "アークス室蘭",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-04",
+      "venue": "メガ",
+      "cond": "外販なし"
+    },
+    {
+      "date": "2026-07-04",
+      "venue": "店舗",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-05",
+      "venue": "MOP",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-05",
+      "venue": "MOP(セブン)",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-05",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン有"
+    },
+    {
+      "date": "2026-07-05",
+      "venue": "アークス菊水",
+      "cond": "リスポーン様なし"
+    },
+    {
+      "date": "2026-07-05",
+      "venue": "ツルハ",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-05",
+      "venue": "アークス室蘭",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-05",
+      "venue": "メガ",
+      "cond": "外販なし"
+    },
+    {
+      "date": "2026-07-05",
+      "venue": "店舗",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-06",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン有"
+    },
+    {
+      "date": "2026-07-06",
+      "venue": "アーニス",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-06",
+      "venue": "メガ",
+      "cond": "外販あり"
+    },
+    {
+      "date": "2026-07-06",
+      "venue": "アークス菊水",
+      "cond": "リスポーン様なし"
+    },
+    {
+      "date": "2026-07-06",
+      "venue": "ツルハ",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-06",
+      "venue": "アークス室蘭",
+      "cond": "外販なし"
+    },
+    {
+      "date": "2026-07-06",
+      "venue": "店舗",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-07",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン有"
+    },
+    {
+      "date": "2026-07-07",
+      "venue": "アーニス",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-07",
+      "venue": "メガ",
+      "cond": "外販あり"
+    },
+    {
+      "date": "2026-07-07",
+      "venue": "アークス菊水",
+      "cond": "リスポーン様なし"
+    },
+    {
+      "date": "2026-07-07",
+      "venue": "ツルハ",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-07",
+      "venue": "アークス室蘭",
+      "cond": "外販なし"
+    },
+    {
+      "date": "2026-07-07",
+      "venue": "店舗",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-08",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン様なし"
+    },
+    {
+      "date": "2026-07-08",
+      "venue": "メガ",
+      "cond": "外販なし"
+    },
+    {
+      "date": "2026-07-09",
+      "venue": "メガ",
+      "cond": "外販あり"
+    },
+    {
+      "date": "2026-07-09",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン様なし"
+    },
+    {
+      "date": "2026-07-09",
+      "venue": "アークス室蘭",
+      "cond": "外販なし"
+    },
+    {
+      "date": "2026-07-09",
+      "venue": "店舗",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-10",
+      "venue": "メガ",
+      "cond": "外販あり"
+    },
+    {
+      "date": "2026-07-10",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン有"
+    },
+    {
+      "date": "2026-07-10",
+      "venue": "アークス菊水",
+      "cond": "リスポーン様あり"
+    },
+    {
+      "date": "2026-07-10",
+      "venue": "アークス室蘭",
+      "cond": "外販なし"
+    },
+    {
+      "date": "2026-07-10",
+      "venue": "店舗",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-11",
+      "venue": "MOP",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-11",
+      "venue": "MOP(セブン)",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-11",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン有"
+    },
+    {
+      "date": "2026-07-11",
+      "venue": "アークス菊水",
+      "cond": "リスポーン様あり"
+    },
+    {
+      "date": "2026-07-11",
+      "venue": "アークス室蘭",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-11",
+      "venue": "メガ",
+      "cond": "外販なし"
+    },
+    {
+      "date": "2026-07-11",
+      "venue": "店舗",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-12",
+      "venue": "MOP",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-12",
+      "venue": "MOP(セブン)",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-12",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン有"
+    },
+    {
+      "date": "2026-07-12",
+      "venue": "アークス菊水",
+      "cond": "リスポーン様あり"
+    },
+    {
+      "date": "2026-07-12",
+      "venue": "アークス室蘭",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-12",
+      "venue": "メガ",
+      "cond": "外販なし"
+    },
+    {
+      "date": "2026-07-12",
+      "venue": "店舗",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-13",
+      "venue": "アークス室蘭",
+      "cond": "外販あり"
+    },
+    {
+      "date": "2026-07-13",
+      "venue": "メガ",
+      "cond": "外販あり"
+    },
+    {
+      "date": "2026-07-13",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン有"
+    },
+    {
+      "date": "2026-07-13",
+      "venue": "アークス菊水",
+      "cond": "リスポーン様あり"
+    },
+    {
+      "date": "2026-07-13",
+      "venue": "店舗",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-14",
+      "venue": "アークス菊水",
+      "cond": "リスポーン様あり"
+    },
+    {
+      "date": "2026-07-14",
+      "venue": "アークス室蘭",
+      "cond": "外販あり"
+    },
+    {
+      "date": "2026-07-14",
+      "venue": "メガ",
+      "cond": "外販あり"
+    },
+    {
+      "date": "2026-07-14",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン有"
+    },
+    {
+      "date": "2026-07-14",
+      "venue": "店舗",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-15",
+      "venue": "メガ",
+      "cond": "外販あり"
+    },
+    {
+      "date": "2026-07-15",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン様なし"
+    },
+    {
+      "date": "2026-07-15",
+      "venue": "アークス室蘭",
+      "cond": "外販なし"
+    },
+    {
+      "date": "2026-07-15",
+      "venue": "店舗",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-16",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン様なし"
+    },
+    {
+      "date": "2026-07-16",
+      "venue": "アークス菊水",
+      "cond": "リスポーン様なし"
+    },
+    {
+      "date": "2026-07-16",
+      "venue": "コープ",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-16",
+      "venue": "アークス室蘭",
+      "cond": "外販なし"
+    },
+    {
+      "date": "2026-07-16",
+      "venue": "メガ",
+      "cond": "外販なし"
+    },
+    {
+      "date": "2026-07-16",
+      "venue": "店舗",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-17",
+      "venue": "メガ",
+      "cond": "外販あり"
+    },
+    {
+      "date": "2026-07-17",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン+催事有"
+    },
+    {
+      "date": "2026-07-17",
+      "venue": "コープ",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-17",
+      "venue": "アークス菊水",
+      "cond": "リスポーン様なし"
+    },
+    {
+      "date": "2026-07-17",
+      "venue": "ツルハ",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-17",
+      "venue": "アークス室蘭",
+      "cond": "外販なし"
+    },
+    {
+      "date": "2026-07-17",
+      "venue": "店舗",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-18",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン+催事有"
+    },
+    {
+      "date": "2026-07-18",
+      "venue": "MOP",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-18",
+      "venue": "アークス菊水",
+      "cond": "リスポーン様なし"
+    },
+    {
+      "date": "2026-07-18",
+      "venue": "ツルハ",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-18",
+      "venue": "アークス室蘭",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-18",
+      "venue": "メガ",
+      "cond": "外販なし"
+    },
+    {
+      "date": "2026-07-18",
+      "venue": "店舗",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-19",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン+催事有"
+    },
+    {
+      "date": "2026-07-19",
+      "venue": "MOP",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-19",
+      "venue": "アークス菊水",
+      "cond": "リスポーン様なし"
+    },
+    {
+      "date": "2026-07-19",
+      "venue": "ツルハ",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-19",
+      "venue": "アークス室蘭",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-19",
+      "venue": "メガ",
+      "cond": "外販なし"
+    },
+    {
+      "date": "2026-07-19",
+      "venue": "店舗",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-20",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン+催事有"
+    },
+    {
+      "date": "2026-07-20",
+      "venue": "MOP",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-20",
+      "venue": "アークス菊水",
+      "cond": "リスポーン様なし"
+    },
+    {
+      "date": "2026-07-20",
+      "venue": "ツルハ",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-20",
+      "venue": "アークス室蘭",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-20",
+      "venue": "メガ",
+      "cond": "外販なし"
+    },
+    {
+      "date": "2026-07-20",
+      "venue": "店舗",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-21",
+      "venue": "アークス菊水",
+      "cond": "リスポーン様なし"
+    },
+    {
+      "date": "2026-07-21",
+      "venue": "アークス室蘭",
+      "cond": "外販あり"
+    },
+    {
+      "date": "2026-07-21",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン+催事有"
+    },
+    {
+      "date": "2026-07-21",
+      "venue": "ツルハ",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-21",
+      "venue": "メガ",
+      "cond": "外販なし"
+    },
+    {
+      "date": "2026-07-21",
+      "venue": "店舗",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-22",
+      "venue": "アークス室蘭",
+      "cond": "外販あり"
+    },
+    {
+      "date": "2026-07-22",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン様なし"
+    },
+    {
+      "date": "2026-07-22",
+      "venue": "メガ",
+      "cond": "外販なし"
+    },
+    {
+      "date": "2026-07-22",
+      "venue": "店舗",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-23",
+      "venue": "アークス菊水",
+      "cond": "リスポーン様なし"
+    },
+    {
+      "date": "2026-07-23",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン様なし"
+    },
+    {
+      "date": "2026-07-23",
+      "venue": "アークス室蘭",
+      "cond": "外販なし"
+    },
+    {
+      "date": "2026-07-23",
+      "venue": "メガ",
+      "cond": "外販なし"
+    },
+    {
+      "date": "2026-07-23",
+      "venue": "店舗",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-24",
+      "venue": "メガ",
+      "cond": "外販あり"
+    },
+    {
+      "date": "2026-07-24",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン+催事有"
+    },
+    {
+      "date": "2026-07-24",
+      "venue": "アークス菊水",
+      "cond": "リスポーン様あり"
+    },
+    {
+      "date": "2026-07-24",
+      "venue": "アークス室蘭",
+      "cond": "外販なし"
+    },
+    {
+      "date": "2026-07-24",
+      "venue": "店舗",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-25",
+      "venue": "MOP",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-25",
+      "venue": "MOP(セブン)",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-25",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン+催事有"
+    },
+    {
+      "date": "2026-07-25",
+      "venue": "アークス菊水",
+      "cond": "リスポーン様あり"
+    },
+    {
+      "date": "2026-07-25",
+      "venue": "アークス室蘭",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-25",
+      "venue": "メガ",
+      "cond": "外販なし"
+    },
+    {
+      "date": "2026-07-25",
+      "venue": "店舗",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-26",
+      "venue": "MOP",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-26",
+      "venue": "MOP(セブン)",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-26",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン+催事有"
+    },
+    {
+      "date": "2026-07-26",
+      "venue": "アークス菊水",
+      "cond": "リスポーン様あり"
+    },
+    {
+      "date": "2026-07-26",
+      "venue": "アークス室蘭",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-26",
+      "venue": "メガ",
+      "cond": "外販なし"
+    },
+    {
+      "date": "2026-07-26",
+      "venue": "店舗",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-27",
+      "venue": "アークス菊水",
+      "cond": "リスポーン様あり"
+    },
+    {
+      "date": "2026-07-27",
+      "venue": "アークス室蘭",
+      "cond": "外販あり"
+    },
+    {
+      "date": "2026-07-27",
+      "venue": "メガ",
+      "cond": "外販あり"
+    },
+    {
+      "date": "2026-07-27",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン+催事有"
+    },
+    {
+      "date": "2026-07-27",
+      "venue": "店舗",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-28",
+      "venue": "アークス室蘭",
+      "cond": "外販あり"
+    },
+    {
+      "date": "2026-07-28",
+      "venue": "メガ",
+      "cond": "外販あり"
+    },
+    {
+      "date": "2026-07-28",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン+催事有"
+    },
+    {
+      "date": "2026-07-28",
+      "venue": "アークス菊水",
+      "cond": "リスポーン様あり"
+    },
+    {
+      "date": "2026-07-28",
+      "venue": "店舗",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-29",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン様なし"
+    },
+    {
+      "date": "2026-07-29",
+      "venue": "アークス室蘭",
+      "cond": "外販なし"
+    },
+    {
+      "date": "2026-07-29",
+      "venue": "メガ",
+      "cond": "外販なし"
+    },
+    {
+      "date": "2026-07-29",
+      "venue": "店舗",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-30",
+      "venue": "アークス菊水",
+      "cond": "リスポーン様なし"
+    },
+    {
+      "date": "2026-07-30",
+      "venue": "メガ",
+      "cond": "外販あり"
+    },
+    {
+      "date": "2026-07-30",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン様なし"
+    },
+    {
+      "date": "2026-07-30",
+      "venue": "アークス室蘭",
+      "cond": "外販なし"
+    },
+    {
+      "date": "2026-07-30",
+      "venue": "店舗",
+      "cond": ""
+    },
+    {
+      "date": "2026-07-31",
+      "venue": "メガ",
+      "cond": "外販あり"
+    },
+    {
+      "date": "2026-07-31",
+      "venue": "ビッグ清田",
+      "cond": "リスポーン有"
+    },
+    {
+      "date": "2026-07-31",
+      "venue": "アークス菊水",
+      "cond": "リスポーン様あり"
+    },
+    {
+      "date": "2026-07-31",
+      "venue": "アークス室蘭",
+      "cond": "外販なし"
+    },
+    {
+      "date": "2026-07-31",
+      "venue": "店舗",
+      "cond": ""
+    }
+  ],
+  "actuals": []
+};
+}
+function loadJuly(){D=normalize(julyData());fillSettings();renderAll();toast('7月データを読み込みました');switchTab('day');}
+
+
+/* ===================== Rate editor ===================== */
+function regionOpts(cur){return D.regions.filter(r=>!r.isStore).map(r=>`<option ${r.name===cur?'selected':''}>${r.name}</option>`).join('');}
+function dayOpts(cur){return['平日','土日'].map(d=>`<option ${d===cur?'selected':''}>${d}</option>`).join('');}
+function venueRegion(vname){for(const r of D.regions){if((r.venues||[]).some(v=>v.name===vname))return r;}return null;}
+function findV(vname){for(const r of D.regions){const v=(r.venues||[]).find(x=>x.name===vname);if(v)return v;}return null;}
+function renderRates(){
+  const el=document.getElementById('ratesBody'); if(!el)return;
+  let html='';
+  let ri=-1;
+  for(const r of D.regions){
+    ri++;
+    if(r.isStore){
+      html+=`<div class="card"><h2>店舗（集計） <span class="ord"><button class="ob" onclick="moveRegionOrder(${ri},-1)">▲</button><button class="ob" onclick="moveRegionOrder(${ri},1)">▼</button></span></h2><div class="row">`+
+        `<div><label class="f">店舗数</label><input class="num" type="number" value="${r.storeCount}" onchange="setStore('count',this.value)"></div>`+
+        `<div><label class="f">1日あたり件数</label><input class="num" type="number" step="0.01" value="${r.storeRate}" onchange="setStore('rate',this.value)"></div>`+
+        `</div></div>`;
+      continue;
+    }
+    html+=`<div class="card"><h2>${r.name} <span class="ord"><button class="ob" onclick="moveRegionOrder(${ri},-1)">▲</button><button class="ob" onclick="moveRegionOrder(${ri},1)">▼</button></span></h2>`;
+    for(const v of (r.venues||[])){
+      html+=`<div class="vedit"><div class="vhead"><span class="ord"><button class="ob" onclick="moveVenueOrder('${v.name}',-1)">▲</button><button class="ob" onclick="moveVenueOrder('${v.name}',1)">▼</button></span><b>${v.name}</b> <select onchange="moveVenue('${v.name}',this.value)">${regionOpts(r.name)}</select><button class="x" onclick="delVenue('${v.name}')">会場削除</button></div>`;
+      v.slots.forEach((sl,i)=>{
+        html+=`<div class="slot"><span class="ord"><button class="ob" onclick="moveSlotOrder('${v.name}',${i},-1)">▲</button><button class="ob" onclick="moveSlotOrder('${v.name}',${i},1)">▼</button></span><select onchange="setSlot('${v.name}',${i},'day',this.value)">${dayOpts(sl.day)}</select>`+
+          `<input class="cond" placeholder="条件（任意）" value="${(sl.cond||'').replace(/"/g,'&quot;')}" onchange="setSlot('${v.name}',${i},'cond',this.value)">`+
+          `<input class="num" type="number" step="0.01" value="${sl.rate}" onchange="setSlot('${v.name}',${i},'rate',this.value)"><span class="unit">件/日</span>`+
+          `<button class="x" onclick="delSlot('${v.name}',${i})">×</button></div>`;
+      });
+      html+=`<button class="btn sm sec" onclick="addSlot('${v.name}')">＋ レート行を追加</button></div>`;
+    }
+    html+=`<div class="addv"><input id="newv__${r.name}" placeholder="新しい会場名"><button class="btn sm" onclick="addVenue('${r.name}')">＋ 会場</button></div></div>`;
+  }
+  el.innerHTML=html;
+}
+function setSlot(vname,i,field,val){const v=findV(vname);if(!v)return;const sl=v.slots[i];if(!sl)return;if(field==='rate')sl.rate=parseFloat(val)||0;else if(field==='day')sl.day=val;else sl.cond=val;renderCore();}
+function addSlot(vname){const v=findV(vname);if(!v)return;v.slots.push({day:'平日',cond:'',rate:0});renderAll();toast('レート行を追加');}
+function delSlot(vname,i){const v=findV(vname);if(!v)return;v.slots.splice(i,1);renderAll();}
+function moveSlotOrder(vname,i,dir){const v=findV(vname);if(!v)return;const j=i+dir;if(i<0||j<0||j>=v.slots.length)return;const t=v.slots[i];v.slots[i]=v.slots[j];v.slots[j]=t;renderAll();}
+function addVenue(region){const inp=document.getElementById('newv__'+region);const name=(inp&&inp.value||'').trim();if(!name){toast('会場名を入力してください');return;}if(findV(name)){toast('同名の会場があります');return;}const r=D.regions.find(x=>x.name===region);r.venues=r.venues||[];r.venues.push({name,slots:[{day:'平日',cond:'',rate:0}]});renderAll();toast('会場を追加');}
+function delVenue(vname){if(!confirm(vname+' を削除します。予定からも除外されます。よろしいですか？'))return;const r=venueRegion(vname);if(r)r.venues=r.venues.filter(v=>v.name!==vname);D.schedule=D.schedule.filter(e=>e.venue!==vname);renderAll();toast('会場を削除');}
+function moveVenue(vname,toRegion){const from=venueRegion(vname);if(!from)return;const v=from.venues.find(x=>x.name===vname);from.venues=from.venues.filter(x=>x.name!==vname);const to=D.regions.find(r=>r.name===toRegion);to.venues=to.venues||[];to.venues.push(v);renderAll();}
+function moveVenueOrder(vname,dir){const r=venueRegion(vname);if(!r||!r.venues)return;const i=r.venues.findIndex(v=>v.name===vname);const j=i+dir;if(i<0||j<0||j>=r.venues.length)return;const t=r.venues[i];r.venues[i]=r.venues[j];r.venues[j]=t;renderAll();}
+function moveRegionOrder(ri,dir){const j=ri+dir;if(ri<0||ri>=D.regions.length||j<0||j>=D.regions.length)return;const t=D.regions[ri];D.regions[ri]=D.regions[j];D.regions[j]=t;renderAll();}
+function fixScheduleConds(){
+  const remap={'外販あり':'外販有','外販なし':'外販無','リスポーン様あり':'リスポーン有','リスポーン様なし':'リスポーン無'};
+  let fixed=0; const unresolved=[];
+  (D.schedule||[]).forEach(e=>{
+    const v=findV(e.venue); if(!v)return;
+    const dt=dayType(e.date);
+    const conds=v.slots.filter(s=>s.day===dt).map(s=>s.cond||'');
+    if(conds.length===0)return;
+    const cur=e.cond||'';
+    if(conds.includes(cur))return;
+    let nc=null;
+    if(remap[cur]!=null && conds.includes(remap[cur])) nc=remap[cur];
+    else if(conds.length===1) nc=conds[0];
+    if(nc!=null){ e.cond=nc; fixed++; }
+    else unresolved.push(fmtMD(e.date)+' '+e.venue+'「'+(cur||'空')+'」');
+  });
+  renderAll();
+  const msg=document.getElementById('rcMsg');
+  let t='スケジュールの条件をレートに合わせました：'+fixed+'件を修正。';
+  if(unresolved.length) t+=' 判定できなかった'+unresolved.length+'件（スケジュール画面で選び直してください）：'+unresolved.slice(0,8).join(' / ')+(unresolved.length>8?' …':'');
+  else t+=' 残りは元から一致しています。';
+  if(msg)msg.textContent=t; toast('スケジュール条件を同期しました');
+}
+function setStore(field,val){const r=D.regions.find(x=>x.isStore);if(!r)return;if(field==='count')r.storeCount=parseInt(val)||0;else r.storeRate=parseFloat(val)||0;renderCore();}
+
+/* ===================== Schedule import (their format) ===================== */
+function ensureSlot(venue,dt,cc,added){
+  let v=findV(venue);
+  if(!v){let r=D.regions.find(x=>x.name==='未分類');if(!r){r={name:'未分類',category:'外販',venues:[]};const idx=D.regions.findIndex(x=>x.isStore);D.regions.splice(idx<0?D.regions.length:idx,0,r);}v={name:venue,slots:[]};r.venues.push(v);}
+  if(!v.slots.some(sl=>sl.day===dt&&(sl.cond||'')===(cc||''))){v.slots.push({day:dt,cond:cc,rate:0});added.push(`${venue}（${dt}${cc?'・'+cc:''}）`);}
+}
+function importSchedule(){
+  const ta=document.getElementById('importArea'); const msg=document.getElementById('importMsg');
+  const txt=(ta.value||'').trim(); if(!txt){msg.textContent='スケジュールを貼り付けてください。';return;}
+  let arr; try{const clean=txt.replace(/[\u201C\u201D\u201E\u201F\uFF02]/g,'"').replace(/[\u2018\u2019]/g,"'");arr=JSON.parse(clean);}catch(e){msg.textContent='JSON形式エラー：'+e.message;return;}
+  if(!Array.isArray(arr)||!arr.length||!arr[0]||!arr[0].date){msg.textContent='[ {date, venues:[…]} ] の形式で貼り付けてください。';return;}
+  const hol=(document.getElementById('importHol').value||'').split(/[,\s、]+/).map(x=>x.trim()).filter(Boolean);
+  HOLIDAYS=new Set(hol);
+  const month=arr[0].date.slice(0,7);
+  const sched=[]; const added=[];
+  for(const row of arr){const dt=dayType(row.date);for(const tok of (row.venues||[])){
+    if(tok==='店舗'){sched.push({date:row.date,venue:'店舗',cond:''});if(!D.regions.some(r=>r.isStore))D.regions.push({name:'店舗',category:'店舗',isStore:true,storeCount:1,storeRate:0});continue;}
+    const p=parseToken(tok);const cc=canonCond(p.venue,p.cond,dt);sched.push({date:row.date,venue:p.venue,cond:cc});ensureSlot(p.venue,dt,cc,added);
+  }}
+  const first=arr.map(r=>r.date).sort()[0];
+  D.month=month; D.holidays=hol; D.schedule=sched; D.targetDate=monthEnd(month); D.basisDate=addDays(first,-1);
+  if(document.getElementById('importReset').checked){D.actuals=[];D.goal=0;D.carryIn={asOf:D.basisDate,cum:0};}
+  fillSettings(); renderAll();
+  const uniq=[...new Set(added)];
+  if(uniq.length){msg.innerHTML=`取込完了（${sched.length}件）。<b>新しい会場/条件にレート未入力（0件）があります。</b>「レート編集」で入れてください：<br>`+uniq.map(x=>'・'+x).join('<br>');switchTab('rates');}
+  else{msg.textContent=`取込完了（${sched.length}件）。日別目標・責任者展開に反映しました。`;toast('スケジュールを取込みました');switchTab('day');}
+}
+
+/* ===================== init ===================== */
+function init(){
+  let ok=false;
+  try{const s=localStorage.getItem(LS_KEY);if(s){D=normalize(JSON.parse(s));ok=true;}}catch(e){}
+  if(!ok)D=normalize(julyData());
+  fillSettings();renderAll();
+}
+init();
+</script>
+<script>
+if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+  window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});
+}
+</script>
+</body>
+</html>
