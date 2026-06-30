@@ -526,7 +526,8 @@ function dayTargets(D,basis){
   return Object.keys(map).sort().map(d=>{ map[d].venues.sort((a,b)=>venueOrderIndex(D,a.name)-venueOrderIndex(D,b.name)); return {date:d,...map[d]}; });
 }
 function sumForecasts(D){return (D.forecasts||[]).reduce((a,b)=>a+(b.count||0),0);}
-function pipelineActivated(D){return Math.floor(sumForecasts(D)*D.pipeline.rate);}
+function latestForecast(D){const fs=(D.forecasts||[]);let best=null;for(const f of fs){if(best===null||f.date>best.date)best=f;}return best?(best.count||0):0;}
+function pipelineActivated(D){return Math.floor(latestForecast(D)*D.pipeline.rate);}
 
 function summary(D,basis){
   const cum=cumActual(D,basis);
@@ -539,7 +540,7 @@ function summary(D,basis){
 
 function renderManagerText(D,basis,R){
   const cum=Math.round(R.cum), remaining=D.goal-cum;
-  const raw=sumForecasts(D), act=R.act, ratePct=Math.round(D.pipeline.rate*100);
+  const raw=latestForecast(D), act=R.act, ratePct=Math.round(D.pipeline.rate*100);
   const nextD=fmtMD(addDays(basis,1));
   let o='@All\n\n';
   o+=`■実行計画${num(D.goal)}件\n`;
@@ -786,9 +787,9 @@ function renderHit(D,basis,R){
 /* ---- data: actuals ---- */
 function renderDaily(){
   const el=document.getElementById('dailyList'); if(!el)return;
-  const raw=sumForecasts(D), act=Math.floor(raw*D.pipeline.rate);
+  const raw=latestForecast(D), act=Math.floor(raw*D.pipeline.rate);
   const sumEl=document.getElementById('fSum');
-  if(sumEl)sumEl.innerHTML=`実績 累計 <b class="num">${num(Math.round(cumActual(D,D.basisDate)))}</b>件 ／ 見込み合計 <b class="num">${num(raw)}</b>件 → 開通率 ${Math.round(D.pipeline.rate*100)}% で <b class="num">${act}</b>件 を着地に加算`;
+  if(sumEl)sumEl.innerHTML=`実績 累計 <b class="num">${num(Math.round(cumActual(D,D.basisDate)))}</b>件 ／ 現在の見込み <b class="num">${num(raw)}</b>件（最新入力日） → 開通率 ${Math.round(D.pipeline.rate*100)}% で <b class="num">${act}</b>件 を着地に加算`;
   const advBtn=document.getElementById('advBasis');
   if(advBtn){
     let latest=''; (D.actuals||[]).forEach(a=>{if(a.date>latest)latest=a.date;});
