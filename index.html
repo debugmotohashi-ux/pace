@@ -226,6 +226,9 @@
     <button class="tab" data-tab="staff">スタッフ展開</button>
     <button class="tab" data-tab="hit">必達モード</button>
     <button class="tab" data-tab="rates">レート編集</button>
+    <button class="tab" data-tab="reports">日報取込</button>
+    <button class="tab" data-tab="names">名称管理</button>
+    <button class="tab" data-tab="datamgr">データ管理</button>
     <button class="tab" data-tab="import">取込・月更新</button>
     <button class="tab" data-tab="json">JSON</button>
   </div>
@@ -289,7 +292,7 @@
       </div>
       <button class="btn ok block" onclick="addDaily()">この日を保存（実績入力日を基準日に）</button>
       <p class="note" id="fSum" style="margin-top:8px"></p>
-      <p class="note">実績を保存すると、その日付が自動で基準日になり、累計・残数・必達が更新されます。一覧の確認・修正は下の「実績の一覧」から。</p>
+      <p class="note">Ver1.2では店舗報告が正式実績です。手入力は旧データや移行時の補助として残しています。日報取込済みの日付は、日報を修正して更新してください。</p>
     </div>
 
     <div class="card">
@@ -382,6 +385,95 @@
       <div class="divider"></div>
       <p class="note">来月への移行：①下のボタンで今月のレート＋予定を書き出して保存 → ②来月、JSONタブでそれを読込（レート復元）→ ③このタブに新しい月の予定を貼って取込。</p>
       <button class="btn sec block" onclick="exportJson()">今月のレート＋予定をJSONで書き出す</button>
+    </div>
+  </section>
+
+  <!-- REPORT IMPORT -->
+  <section id="view-reports" class="hidden">
+    <div class="card">
+      <h2>日報取込 <span class="tag">Ver1.2・保存前確認</span></h2>
+      <p class="note">報告基準日と報告種別を先に指定し、原文を貼り付けてください。店舗報告だけが正式実績を更新します。</p>
+      <div class="row">
+        <div>
+          <label class="f">報告種別</label>
+          <select id="reportType">
+            <option value="store">店舗報告</option>
+            <option value="event">イベント報告</option>
+            <option value="cumulative">イベント累計報告</option>
+          </select>
+        </div>
+        <div><label class="f">報告基準日</label><input type="date" id="reportDate"></div>
+      </div>
+      <textarea id="reportRaw" spellcheck="false" placeholder="ここに報告文を貼り付け"></textarea>
+      <button class="btn ok block" style="margin-top:10px" onclick="PACEV12.parseReport()">解析して確認画面へ</button>
+      <p class="note" id="reportParseMsg" style="margin-top:8px"></p>
+    </div>
+    <div class="card hidden" id="reportPreviewCard">
+      <h2>保存前確認 <span class="tag" id="reportConfidence">—</span></h2>
+      <div id="reportIssues"></div>
+      <div id="reportResolutions"></div>
+      <div id="reportPreview"></div>
+      <div id="reportDiff"></div>
+      <div class="divider"></div>
+      <label class="f">修正理由（同じ報告の更新時は必須）</label>
+      <input id="reportReason" placeholder="例：店舗から訂正報告が届いたため">
+      <button class="btn ok block" style="margin-top:10px" onclick="PACEV12.savePreview()">確認して保存</button>
+    </div>
+    <div class="card">
+      <h2>取込履歴 <span class="tag">正本・補完を分離</span></h2>
+      <div id="reportHistory"></div>
+    </div>
+  </section>
+
+  <!-- NAME MASTER -->
+  <section id="view-names" class="hidden">
+    <div class="card">
+      <h2>正式名称マスタ <span class="tag">店舗・会場・スタッフ</span></h2>
+      <div class="row three">
+        <div><label class="f">種別</label><select id="nameKind"><option value="store">店舗</option><option value="venue">イベント会場</option><option value="staff">スタッフ</option></select></div>
+        <div><label class="f">正式名称</label><input id="nameCanonical"></div>
+        <div><label class="f">別名（カンマ区切り）</label><input id="nameAliases"></div>
+      </div>
+      <button class="btn ok block" onclick="PACEV12.addMasterFromForm()">名称を追加</button>
+    </div>
+    <div class="card">
+      <h2>登録済み名称</h2>
+      <div id="nameMasterList"></div>
+    </div>
+  </section>
+
+  <!-- DATA MANAGEMENT -->
+  <section id="view-datamgr" class="hidden">
+    <div class="card">
+      <h2>データ状態 <span class="tag">端末内のみ</span></h2>
+      <div id="dbStatus"></div>
+    </div>
+    <div class="card">
+      <h2>レート分析 <span class="tag">直近60日・承認式</span></h2>
+      <p class="note">イベント獲得数と、店舗報告で会場へ帰属できた開通数を足しません。獲得レート×開通率で推奨レートを算出します。</p>
+      <div id="rateAnalysis"></div>
+    </div>
+    <div class="card">
+      <h2>暗号化バックアップ <span class="tag">手動ブリッジ</span></h2>
+      <p class="note">全データ・元報告・名称マスタ・監査ログ・設定を暗号化して保存します。パスワードは端末にも保存しません。</p>
+      <div class="row">
+        <div><label class="f">バックアップ用パスワード</label><input type="password" id="backupPassword" autocomplete="new-password"></div>
+        <div><label class="f">確認</label><input type="password" id="backupPassword2" autocomplete="new-password"></div>
+      </div>
+      <button class="btn block" onclick="PACEV12.downloadBackup()">暗号化バックアップを作成</button>
+      <div class="divider"></div>
+      <label class="f">バックアップから復元</label>
+      <input type="file" id="restoreFile" accept=".pacebackup,application/json">
+      <div class="row" style="margin-top:10px">
+        <div><label class="f">復元用パスワード</label><input type="password" id="restorePassword"></div>
+        <div style="display:flex;align-items:flex-end"><button class="btn sec block" onclick="PACEV12.previewRestore()">復元内容を確認</button></div>
+      </div>
+      <div id="restorePreview"></div>
+      <button id="restoreExecute" class="btn ok block hidden" onclick="PACEV12.executeRestore()">現在データを退避して復元する</button>
+    </div>
+    <div class="card">
+      <h2>監査ログ <span class="tag">修正者：本橋</span></h2>
+      <div id="auditList"></div>
     </div>
   </section>
 
@@ -803,16 +895,20 @@ function renderDaily(){
   el.innerHTML=dates.map(d=>{
     const a=(D.actuals||[]).find(x=>x.date===d); const fc=(D.forecasts||[]).find(x=>x.date===d);
     const bb=(d>asOf&&d<=D.basisDate)?'<span class="bdot">●</span>':'';
+    const locked=a&&a.source==='store_reports';
+    const forecastLocked=fc&&fc.source==='store_reservations';
     return `<div class="arow drow"><span class="d num">${fmtMD(d)} <span class="wd">${wd(d)}</span>${bb}</span>`+
-      `<span class="din first">実<input type="number" inputmode="numeric" value="${a?num(a.total):''}" onchange="setDailyActual('${d}',this.value)"></span>`+
-      `<span class="din">見<input type="number" inputmode="numeric" value="${fc?num(fc.count):''}" onchange="setDailyForecast('${d}',this.value)"></span>`+
+      `<span class="din first">実<input type="number" inputmode="numeric" value="${a?num(a.total):''}" ${locked?'disabled title="店舗報告から集計"':''} onchange="setDailyActual('${d}',this.value)">${locked?'<span class="tag">日報</span>':''}</span>`+
+      `<span class="din">見<input type="number" inputmode="numeric" value="${fc?num(fc.count):''}" ${forecastLocked?'disabled title="店舗報告の来店予約から集計"':''} onchange="setDailyForecast('${d}',this.value)">${forecastLocked?'<span class="tag">予約</span>':''}</span>`+
       `<button class="x" onclick="delDaily('${d}')">×</button></div>`;
   }).join('');
 }
 function addDaily(){
   const d=document.getElementById('dDate').value; if(!d){toast('日付を入力してください');return;}
   const av=document.getElementById('dActual').value, fv=document.getElementById('dForecast').value; let any=false, actualSaved=false;
-  if(av!==''&&!isNaN(parseFloat(av))){const t=parseFloat(av);D.actuals=D.actuals||[];const ex=D.actuals.find(x=>x.date===d);if(ex)ex.total=t;else D.actuals.push({date:d,total:t});any=true;actualSaved=true;}
+  const reportMode=(D.actuals||[]).some(x=>x.source==='store_reports');
+  if(reportMode&&(av!==''||fv!=='')){toast('店舗報告の運用開始後は「日報取込」から更新してください');return;}
+  if(av!==''&&!isNaN(parseFloat(av))){const t=parseFloat(av);D.actuals=D.actuals||[];const ex=D.actuals.find(x=>x.date===d);if(ex&&ex.source==='store_reports'){toast('この日の実績は店舗報告から更新してください');return;}if(ex)ex.total=t;else D.actuals.push({date:d,total:t,source:'manual'});any=true;actualSaved=true;}
   if(fv!==''&&!isNaN(parseFloat(fv))){const c=parseFloat(fv);D.forecasts=D.forecasts||[];const ex=D.forecasts.find(x=>x.date===d);if(ex)ex.count=c;else D.forecasts.push({date:d,count:c});any=true;}
   if(!any){toast('実績か見込みを入力してください');return;}
   if(actualSaved){ D.basisDate=d; const ib=document.getElementById('iBasis'); if(ib)ib.value=d; }
@@ -820,15 +916,18 @@ function addDaily(){
   renderAll();
   toast(actualSaved?('保存しました（基準日を'+fmtMD(d)+'に設定）'):'保存しました');
 }
-function delDaily(d){D.actuals=(D.actuals||[]).filter(x=>x.date!==d);D.forecasts=(D.forecasts||[]).filter(x=>x.date!==d);renderAll();}
+function delDaily(d){const a=(D.actuals||[]).find(x=>x.date===d),f=(D.forecasts||[]).find(x=>x.date===d);if((a&&a.source==='store_reports')||(f&&f.source==='store_reservations')){toast('店舗報告から作られた数値は日報取込から修正してください');return;}D.actuals=(D.actuals||[]).filter(x=>x.date!==d);D.forecasts=(D.forecasts||[]).filter(x=>x.date!==d);renderAll();}
 function setDailyActual(d,v){
   v=String(v).trim(); D.actuals=D.actuals||[];
+  const current=D.actuals.find(x=>x.date===d);if(current&&current.source==='store_reports'){toast('店舗報告から作られた実績は日報取込から修正してください');renderAll();return;}
   if(v===''||isNaN(parseFloat(v))){D.actuals=D.actuals.filter(x=>x.date!==d);}
-  else{const t=parseFloat(v);const ex=D.actuals.find(x=>x.date===d);if(ex)ex.total=t;else D.actuals.push({date:d,total:t});}
+  else{const t=parseFloat(v);const ex=D.actuals.find(x=>x.date===d);if(ex)ex.total=t;else D.actuals.push({date:d,total:t,source:'manual'});}
   renderAll();
 }
 function setDailyForecast(d,v){
   v=String(v).trim(); D.forecasts=D.forecasts||[];
+  const current=D.forecasts.find(x=>x.date===d);if(current&&current.source==='store_reservations'){toast('店舗報告の来店予約は日報取込から修正してください');renderAll();return;}
+  if((D.actuals||[]).some(x=>x.source==='store_reports')){toast('店舗報告の運用開始後は見込みも日報取込から更新してください');renderAll();return;}
   if(v===''||isNaN(parseFloat(v))){D.forecasts=D.forecasts.filter(x=>x.date!==d);}
   else{const c=parseFloat(v);const ex=D.forecasts.find(x=>x.date===d);if(ex)ex.count=c;else D.forecasts.push({date:d,count:c});}
   renderAll();
@@ -973,10 +1072,13 @@ function toast(m){const t=document.getElementById('toast');t.textContent=m;t.cla
 function switchTab(name){
   const activeTab=(name==='schedlist'||name==='actuallist')?'data':name;
   document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===activeTab));
-  const map={day:'view-day',mgr:'view-mgr',staff:'view-staff',hit:'view-hit',rates:'view-rates',import:'view-import',data:'view-data',json:'view-json',schedlist:'view-schedlist',actuallist:'view-actuallist'};
+  const map={day:'view-day',mgr:'view-mgr',staff:'view-staff',hit:'view-hit',rates:'view-rates',reports:'view-reports',names:'view-names',datamgr:'view-datamgr',import:'view-import',data:'view-data',json:'view-json',schedlist:'view-schedlist',actuallist:'view-actuallist'};
   Object.values(map).forEach(id=>{const el=document.getElementById(id); if(el)el.classList.add('hidden');});
   const tgt=document.getElementById(map[name]); if(tgt)tgt.classList.remove('hidden');
   if(name==='data')fillSettings();
+  if(window.PACEV12&&name==='reports')PACEV12.renderHistory();
+  if(window.PACEV12&&name==='names')PACEV12.renderMasters();
+  if(window.PACEV12&&name==='datamgr')PACEV12.renderDataManager();
   window.scrollTo({top:0,behavior:'smooth'});
 }
 document.getElementById('tabs').addEventListener('click',e=>{const b=e.target.closest('.tab');if(b)switchTab(b.dataset.tab);});
@@ -2222,6 +2324,7 @@ function init(){
 }
 init();
 </script>
+<script src="pace-data-v12.js"></script>
 <script>
 if('serviceWorker' in navigator && location.protocol.startsWith('http')){
   window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});

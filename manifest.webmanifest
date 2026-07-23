@@ -1,7 +1,7 @@
 {
   "name": "PACE",
   "short_name": "PACE",
-  "description": "月目標を日次に配分し、着地を見える化する営業計画ツール",
+  "description": "店舗報告を正データとして、日次実績・着地・レートを管理する営業分析ツール",
   "lang": "ja",
   "dir": "ltr",
   "start_url": "./",
