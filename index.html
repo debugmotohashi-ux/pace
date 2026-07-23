@@ -284,6 +284,19 @@
   <!-- DATA -->
   <section id="view-data" class="hidden">
     <div class="card">
+      <h2>拠点不明調整 <span class="tag">全体件数のみ補正</span></h2>
+      <p class="note">全体件数は判明しているものの、店舗・イベント会場へ帰属できない差分を登録します。月間実績と着地には反映し、拠点別レートには使用しません。</p>
+      <div class="row three">
+        <div><label class="f">日付</label><input type="date" id="uDate"></div>
+        <div><label class="f">増減</label><select id="uDirection"><option value="1">＋ 増加</option><option value="-1">− 減少</option></select></div>
+        <div><label class="f">件数</label><input class="num" type="number" min="0.1" step="0.1" id="uAmount"></div>
+      </div>
+      <div><label class="f">理由（必須）</label><input id="uReason" placeholder="例：全体集計との差分、帰属先確認中"></div>
+      <button class="btn ok block" style="margin-top:10px" onclick="addUnknownAdjustment()">拠点不明として反映</button>
+      <div id="unknownAdjustmentList" class="alist"></div>
+    </div>
+
+    <div class="card">
       <h2>日次入力 <span class="tag">実績・見込みを同じ日付で</span></h2>
       <div class="row three">
         <div><label class="f">日付</label><input type="date" id="dDate"></div>
@@ -561,6 +574,7 @@ function cumActual(D,basis){
   let cum=D.carryIn?D.carryIn.cum:0;
   const asOf=D.carryIn?D.carryIn.asOf:'0000-00-00';
   for(const a of(D.actuals||[])){if(a.date>asOf&&a.date<=basis)cum+=a.total;}
+  for(const a of(D.unknownAdjustments||[])){if(a.date>asOf&&a.date<=basis)cum+=a.amount;}
   return cum;
 }
 function findVenue(D,name){for(const r of D.regions){for(const v of(r.venues||[])){if(v.name===name)return{r,v};}}return null;}
@@ -699,6 +713,7 @@ function renderStaffText(D,basis,R){
   const {start,end}=weekRangeClamped(D,basis);
   const wk=R.days.filter(d=>d.date>=start&&d.date<=end);
   let weekActual=0;(D.actuals||[]).forEach(a=>{if(a.date>=start&&a.date<=end)weekActual+=a.total;});
+  (D.unknownAdjustments||[]).forEach(a=>{if(a.date>=start&&a.date<=end)weekActual+=a.amount;});
   const weekPlan=wk.reduce((s2,d)=>s2+d.goal,0);
   const weekTarget=weekActual+weekPlan;
   const cumAll=Math.round(R.cum), remainAll=D.goal-cumAll;
@@ -743,6 +758,7 @@ function normalize(raw){
   }
   d.schedule=d.schedule||[];
   d.actuals=d.actuals||[];
+  d.unknownAdjustments=d.unknownAdjustments||[];
   d.holidays=d.holidays||[];
   HOLIDAYS=new Set(d.holidays);
   d.targetDate=d.targetDate||monthEnd(d.month||'2025-06');
@@ -755,7 +771,7 @@ function denormalize(d){
     basisDate:d.basisDate,targetDate:d.targetDate,carryIn:d.carryIn,holidays:d.holidays||[],
     pipeline:{ratePct:Math.round(d.pipeline.rate*100)},
     regions:d.regions.map(r=>{const o={name:r.name,category:r.category};if(r.isStore){o.isStore=true;o.storeCount=r.storeCount;o.storeRate=r.storeRate;o.storeRates=r.storeRates||{};if(r.storeVenue)o.storeVenue=r.storeVenue;}else{o.venues=r.venues;}return o;}),
-    schedule:d.schedule,actuals:d.actuals,forecasts:d.forecasts||[]
+    schedule:d.schedule,actuals:d.actuals,unknownAdjustments:d.unknownAdjustments||[],forecasts:d.forecasts||[]
   };
   return out;
 }
@@ -867,6 +883,7 @@ function renderCore(){
   document.getElementById('outStaff').textContent=renderStaffText(D,basis,R);
   renderHit(D,basis,R);
   renderDaily();
+  renderUnknownAdjustments();
   renderVenueSelect();
   renderSchedList();
   save();
@@ -933,6 +950,42 @@ function renderDaily(){
       `<span class="din">見<input type="number" inputmode="numeric" value="${fc?num(fc.count):''}" ${forecastLocked?'disabled title="店舗報告の来店予約から集計"':''} onchange="setDailyForecast('${d}',this.value)">${forecastLocked?'<span class="tag">予約</span>':''}</span>`+
       `<button class="x" onclick="delDaily('${d}')">×</button></div>`;
   }).join('');
+}
+function renderUnknownAdjustments(){
+  const el=document.getElementById('unknownAdjustmentList');if(!el)return;
+  const rows=[...(D.unknownAdjustments||[])].sort((a,b)=>b.date.localeCompare(a.date)||String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  if(!rows.length){el.innerHTML='<p class="note">拠点不明の補正はありません。</p>';return;}
+  const total=rows.reduce((a,x)=>a+(Number(x.amount)||0),0);
+  el.innerHTML=`<p class="note">補正合計：<b class="num">${total>=0?'+':''}${num(total)}件</b></p>`+rows.map(x=>{
+    const signed=x.amount>=0?`+${num(x.amount)}`:num(x.amount);
+    return`<div class="arow"><span class="d num">${fmtMD(x.date)}</span><span class="tag">拠点不明</span><span>${escText(x.reason)}</span><span class="t num">${signed}件</span><button class="x" onclick="removeUnknownAdjustment('${x.id}')">×</button></div>`;
+  }).join('');
+}
+function escText(v){
+  return String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function addUnknownAdjustment(){
+  const date=document.getElementById('uDate').value;
+  const direction=Number(document.getElementById('uDirection').value)||1;
+  const raw=Number(document.getElementById('uAmount').value);
+  const reason=document.getElementById('uReason').value.trim();
+  if(!date){toast('日付を入力してください');return;}
+  if(!Number.isFinite(raw)||raw<=0){toast('0より大きい件数を入力してください');return;}
+  if(!reason){toast('調整理由を入力してください');return;}
+  const rec={id:'unknown_'+Date.now().toString(36)+Math.random().toString(36).slice(2),date,amount:Math.abs(raw)*direction,reason,createdAt:new Date().toISOString(),actor:'端末利用者'};
+  D.unknownAdjustments=D.unknownAdjustments||[];D.unknownAdjustments.push(rec);
+  if(date>D.basisDate)D.basisDate=date;
+  document.getElementById('uAmount').value='';document.getElementById('uReason').value='';
+  renderAll();
+  if(window.PACEV12&&PACEV12.logUnknownAdjustment)PACEV12.logUnknownAdjustment('create',rec);
+  toast(`拠点不明 ${rec.amount>=0?'+':''}${num(rec.amount)}件を反映しました`);
+}
+function removeUnknownAdjustment(id){
+  const rec=(D.unknownAdjustments||[]).find(x=>x.id===id);if(!rec)return;
+  if(!confirm(`${fmtMD(rec.date)}の拠点不明 ${rec.amount>=0?'+':''}${num(rec.amount)}件を取り消しますか？`))return;
+  D.unknownAdjustments=D.unknownAdjustments.filter(x=>x.id!==id);renderAll();
+  if(window.PACEV12&&PACEV12.logUnknownAdjustment)PACEV12.logUnknownAdjustment('remove',rec);
+  toast('拠点不明調整を取り消しました');
 }
 function addDaily(){
   const d=document.getElementById('dDate').value; if(!d){toast('日付を入力してください');return;}
@@ -1053,6 +1106,7 @@ function fillSettings(){
   document.getElementById('iRate').value=Math.round(D.pipeline.rate*100);
   document.getElementById('iCarryCum').value=D.carryIn?D.carryIn.cum:0;
   document.getElementById('iCarryAsOf').value=D.carryIn?D.carryIn.asOf:'';
+  const uDate=document.getElementById('uDate');if(uDate&&!uDate.value)uDate.value=D.basisDate||'';
 }
 function applySettings(){
   D.month=document.getElementById('iMonth').value||D.month;
@@ -1237,7 +1291,7 @@ function importSchedule(){
   }}
   const first=arr.map(r=>r.date).sort()[0];
   D.month=month; D.holidays=hol; D.schedule=sched; D.targetDate=monthEnd(month); D.basisDate=addDays(first,-1);
-  if(document.getElementById('importReset').checked){D.actuals=[];D.goal=0;D.carryIn={asOf:D.basisDate,cum:0};}
+  if(document.getElementById('importReset').checked){D.actuals=[];D.unknownAdjustments=[];D.goal=0;D.carryIn={asOf:D.basisDate,cum:0};}
   fillSettings(); renderAll();
   const uniq=[...new Set(added)];
   if(uniq.length){msg.innerHTML=`取込完了（${sched.length}件）。<b>新しい会場/条件にレート未入力（0件）があります。</b>「レート編集」で入れてください：<br>`+uniq.map(x=>'・'+x).join('<br>');switchTab('rates');}

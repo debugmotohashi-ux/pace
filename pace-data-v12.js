@@ -4,7 +4,7 @@
 const DB_NAME='pace_local_v12';
 const DB_VERSION=1;
 const STORE_NAMES=['core','reports','masters','audit','recommendations','meta'];
-const ACTOR='本橋';
+const ACTOR='端末利用者';
 const SCHEMA_VERSION=12;
 const DAY_MS=86400000;
 let db=null;
@@ -711,6 +711,17 @@ async function applyStoreSuggested(storeName,rate){
   await audit('store_rate_approve',storeName,'店舗別推奨レートを承認',{store:storeName,rate:r.storeRates[storeName],aggregate:r.storeRate});
   await renderDataManager();toast('店舗別レートを反映しました');
 }
+async function logUnknownAdjustment(action,rec){
+  if(!rec)return;
+  const creating=action==='create';
+  await audit(
+    creating?'unknown_adjustment_create':'unknown_adjustment_remove',
+    rec.id,
+    creating?rec.reason:'拠点不明調整を取消',
+    {date:rec.date,amount:rec.amount,originalReason:rec.reason,createdAt:rec.createdAt,rateImpact:false}
+  );
+  await renderAudit();
+}
 async function renderRateAnalysis(){
   const el=document.getElementById('rateAnalysis');if(!el)return;const rows=await rateRows();
   if(!rows.length){el.innerHTML='<p class="note">レート分析に使える報告がまだありません。</p>';return;}
@@ -840,7 +851,7 @@ async function boot(){
 const api={
   parseReport,savePreview,chooseResolution,renderHistory,
   addMasterFromForm,editMaster,addAliasToMaster,toggleMaster,mergeMaster,removeMaster,renderMasters,
-  renderDataManager,applySuggested,applyStoreSuggested,downloadBackup,previewRestore,executeRestore,
+  renderDataManager,applySuggested,applyStoreSuggested,logUnknownAdjustment,downloadBackup,previewRestore,executeRestore,
   _test:{
     parseStoreRaw,parseEventRaw,parseCumulativeRaw,parseAllocationText,classifyProduct,storeOrganicActual,hasRateBlockingIssue,stable,
     collectBackupData,encryptBackup,decryptBackup,replaceDatabase,counts,rateRows
