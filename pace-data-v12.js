@@ -135,7 +135,7 @@ function parseStoreRaw(text,reportDate){
 }
 
 function eventBlocks(text){
-  const re=/(?:^|\n)\s*([^\n【】]+?)\s*\n\s*最終(?:の)?報告致します。/g;let m;const hits=[];
+  const re=/(?:^|\n)\s*([^\n【】]+?)\s*\n\s*最終(?:の)?\s*報告(?:を)?\s*(?:致します|いたします|します|です)[。．.]?/g;let m;const hits=[];
   while((m=re.exec(text)))hits.push({name:m[1].trim(),start:m.index+(m[0][0]==='\n'?1:0),bodyStart:re.lastIndex});
   return hits.map((h,i)=>({name:h.name,raw:text.slice(h.start,i+1<hits.length?hits[i+1].start:text.length),body:text.slice(h.bodyStart,i+1<hits.length?hits[i+1].start:text.length)}));
 }

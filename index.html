@@ -476,7 +476,8 @@
       <button class="btn block" onclick="PACEV12.downloadBackup()">暗号化バックアップを作成</button>
       <div class="divider"></div>
       <label class="f">バックアップから復元</label>
-      <input type="file" id="restoreFile" accept=".pacebackup,application/json">
+      <input type="file" id="restoreFile">
+      <p class="note">iPhone・iPadでは、拡張子が灰色表示される場合があるためファイル種類を制限していません。PACEで作成した「.pacebackup」ファイルを選択してください。内容は復元前に検証されます。</p>
       <div class="row" style="margin-top:10px">
         <div><label class="f">復元用パスワード</label><input type="password" id="restorePassword"></div>
         <div style="display:flex;align-items:flex-end"><button class="btn sec block" onclick="PACEV12.previewRestore()">復元内容を確認</button></div>
@@ -668,9 +669,10 @@ function renderManagerText(D,basis,R){
     for(const ln of r.lines){
       if(!ln.subInt)continue;
       if(ln.store){
-        s2+=`■残${ln.days}日間\n\n`;
-        (ln.storeBreakdown||[]).forEach(x=>{s2+=`・${x.name}：${num(x.targetInt)}件（${r1(x.rateAdjusted)}件/日）\n`;});
-        s2+=`\n店舗合計${num(ln.subInt)}件\n\n`;
+        (ln.storeBreakdown||[]).forEach(x=>{
+          s2+=`・${x.name} 残${ln.days}日間\n${num(x.rateInt)}件/日＝${num(x.targetInt)}件\n\n`;
+        });
+        s2+=`店舗合計${num(ln.subInt)}件\n\n`;
         continue;
       }
       const cond=ln.cond?`（${ln.cond}）`:'';
@@ -684,9 +686,10 @@ function renderManagerText(D,basis,R){
     o+='【店舗】\n\n';
     store.forEach(r=>r.lines.forEach(ln=>{
       if(!ln.subInt)return;
-      o+=`■残${ln.days}日間\n\n`;
-      (ln.storeBreakdown||[]).forEach(x=>{o+=`・${x.name}：${num(x.targetInt)}件（${r1(x.rateAdjusted)}件/日）\n`;});
-      o+=`\n店舗合計${num(ln.subInt)}件\n\n`;
+      (ln.storeBreakdown||[]).forEach(x=>{
+        o+=`・${x.name} 残${ln.days}日間\n${num(x.rateInt)}件/日＝${num(x.targetInt)}件\n\n`;
+      });
+      o+=`店舗合計${num(ln.subInt)}件\n\n`;
     }));
   }
   o+=`総合計${num(R.total)}件\n\n`;
@@ -818,8 +821,12 @@ function compute(D,basis){
   flat.forEach(l=>{
     l.rateInt=Math.round(l.rate*k);l.subInt=l.rateInt*l.days;
     if(l.store&&l.storeBreakdown){
-      const targets=apportion(l.storeBreakdown.map(x=>x.rate),l.subInt);
-      l.storeBreakdown.forEach((x,i)=>{x.targetInt=targets[i];x.rateAdjusted=x.days?targets[i]/l.days:0;});
+      const dailyTargets=apportion(l.storeBreakdown.map(x=>x.rate),l.rateInt);
+      l.storeBreakdown.forEach((x,i)=>{
+        x.rateInt=dailyTargets[i];
+        x.targetInt=x.rateInt*l.days;
+        x.rateAdjusted=x.rateInt;
+      });
     }
   });
   plan.regions.forEach(r=>{r.totalInt=r.lines.reduce((a,l)=>a+l.subInt,0);});
