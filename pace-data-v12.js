@@ -558,6 +558,16 @@ async function addMasterFromForm(){
     document.getElementById('nameCanonical').value='';document.getElementById('nameAliases').value='';await renderMasters();toast('名称を追加しました');
   }catch(e){toast(e.message);}
 }
+async function ensureStoreMasterName(raw){
+  const name=String(raw||'').trim();if(!name)throw new Error('店舗名を入力してください');
+  const key=norm(name),all=await dbAll('masters');
+  const hit=all.find(x=>x.kind==='store'&&x.active&&(x.canonicalKey===key||(x.aliases||[]).some(a=>norm(a)===key)));
+  if(hit)return hit.canonical;
+  const m=await addMaster('store',name,[]);
+  await audit('master_create',m.id,'レート編集画面から店舗を追加',{kind:'store',canonical:m.canonical,aliases:[]});
+  await renderMasters();
+  return m.canonical;
+}
 async function editMaster(id){
   const m=await dbGet('masters',id);if(!m)return;const v=prompt('正式名称を変更',m.canonical);if(v==null||!v.trim())return;
   const before=m.canonical;m.canonical=v.trim();m.canonicalKey=norm(m.canonical);await dbPut('masters',m);await audit('master_rename',id,'正式名称を変更',{before,after:m.canonical});await renderMasters();
@@ -850,7 +860,7 @@ async function boot(){
 
 const api={
   parseReport,savePreview,chooseResolution,renderHistory,
-  addMasterFromForm,editMaster,addAliasToMaster,toggleMaster,mergeMaster,removeMaster,renderMasters,
+  addMasterFromForm,ensureStoreMasterName,editMaster,addAliasToMaster,toggleMaster,mergeMaster,removeMaster,renderMasters,
   renderDataManager,applySuggested,applyStoreSuggested,logUnknownAdjustment,downloadBackup,previewRestore,executeRestore,
   _test:{
     parseStoreRaw,parseEventRaw,parseCumulativeRaw,parseAllocationText,classifyProduct,storeOrganicActual,hasRateBlockingIssue,stable,
