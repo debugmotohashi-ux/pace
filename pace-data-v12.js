@@ -59,8 +59,10 @@ function splitHeadings(text){
 }
 function parseAllocationText(raw){
   const arr=[];if(!raw)return arr;
-  const re=/([^、,，]+?)\s*([\d,.]+)\s*件?/g;let m;
-  while((m=re.exec(raw))){
+  const parts=String(raw).split(/[、,，]/);
+  for(const part of parts){
+    const m=part.trim().match(/^(.+?)\s*([\d,.]+)\s*件?\s*$/);
+    if(!m)continue;
     const nm=m[1].replace(/[→:：]/g,'').trim();
     if(nm)arr.push({venue:nameObj('venue',nm),count:nval(m[2])});
   }
@@ -73,7 +75,7 @@ function parseCategory(body,label,issues){
   const seg=m[2],channels={store:0,instant:0,later:0},allocations={instant:[],later:[]};
   const pats=[['store','店舗'],['instant','即日'],['later','後日']];
   for(const [key,jp] of pats){
-    const x=seg.match(new RegExp(jp+'\\s*→\\s*([\\d,.]+)件(?:\\s*[\\(（]([^\\)）]*)[\\)）])?'));
+    const x=seg.match(new RegExp(jp+'\\s*→\\s*([\\d,.]+)\\s*件(?:\\s*[\\(（]([^\\)）]*)[\\)）])?'));
     if(x){channels[key]=nval(x[1]);if(key!=='store')allocations[key]=parseAllocationText(x[2]);}
     else issues.push(issue('warn','missing_channel',label+'の'+jp+'内訳を認識できません'));
   }
@@ -88,12 +90,14 @@ function parseCategory(body,label,issues){
   return{label,total,channels,allocations};
 }
 function parseReservations(body,reportDate,issues){
-  const rows=[];const re=/来店予約\s*[（(]\s*(\d{1,2})\/(\d{1,2})\s*[〜～~\-]\s*(\d{1,2})\/(\d{1,2})\s*[）)]([\s\S]*?)(?=来店予約|当月累計|$)/g;let m;
+  const rows=[];const re=/来店予約\s*[（(]\s*(\d{1,2})\/(\d{1,2})(?:\s*[〜～~\-]\s*(\d{1,2})\/(\d{1,2}))?\s*[）)]([\s\S]*?)(?=来店予約|当月累計|$)/g;let m;
   while((m=re.exec(body))){
     const seg=m[5];
     const get=k=>{const x=seg.match(new RegExp(k+'\\s*→\\s*([\\d,.]+)件'));return x?nval(x[1]):0;};
-    const row={start:dateFromMD(reportDate,m[1],m[2]),end:dateFromMD(reportDate,m[3],m[4]),mnp:get('MNP'),new:get('新規'),total:get('合計')};
-    if(row.total!==row.mnp+row.new)issues.push(issue('error','reservation_sum',`${m[1]}/${m[2]}〜${m[3]}/${m[4]}の予約合計が一致しません`));
+    const endMonth=m[3]||m[1],endDay=m[4]||m[2];
+    const row={start:dateFromMD(reportDate,m[1],m[2]),end:dateFromMD(reportDate,endMonth,endDay),mnp:get('MNP'),new:get('新規'),total:get('合計')};
+    const period=m[3]?`${m[1]}/${m[2]}〜${m[3]}/${m[4]}`:`${m[1]}/${m[2]}`;
+    if(row.total!==row.mnp+row.new)issues.push(issue('error','reservation_sum',`${period}の予約合計が一致しません`));
     rows.push(row);
   }
   if(!rows.length)issues.push(issue('warn','reservation_missing','来店予約欄を認識できません'));
@@ -167,7 +171,7 @@ function parseEventRaw(text,reportDate){
     if(!tm)issues.push(issue('error','event_total_missing','総販を認識できません'));
     const calc=products.reduce((s,x)=>s+x.gross,0);
     if(total!==calc)issues.push(issue('error','event_total_mismatch',`総販${total}件と開通済＋見込み${calc}件が一致しません`));
-    if(!products.length)issues.push(issue('error','event_products_missing','商材内訳を認識できません'));
+    if(!products.length&&total!==0)issues.push(issue('error','event_products_missing','商材内訳を認識できません'));
     entities.push({
       kind:'event',venue:nameObj('venue',b.name),appealDevice,products,total,
       opened:products.reduce((s,x)=>s+x.opened,0),prospect:products.reduce((s,x)=>s+x.prospect,0),
@@ -280,16 +284,23 @@ async function audit(action,target,reason,details){
   await dbPut('audit',{id:uid('audit'),action,target,reason:reason||'',details:details||null,actor:ACTOR,timestamp:now()});
 }
 
-const DEFAULT_MASTERS=[
-  ['store','苫小牧西',[]],['store','南郷18丁目',[]],['store','南郷7丁目',[]],['store','室蘭中島',[]],['store','メガ',[]],['store','東区役所前',[]],['store','北広島',['北広島店']],
-  ['venue','ビッグ清田',['ビック清田','清田','ビッグ']],['venue','MOP札幌北広島',['MOP','三井','アウトレット']],
-  ['venue','アークス室蘭',['ア中島','アークス中島']],['venue','メガ',[]],
-  ['staff','本橋',['本橋さん','本橋LD']],['staff','藤本',[]],['staff','蝦名',[]],['staff','黒瀬',[]],['staff','山下',[]],['staff','菅原',[]]
-];
+const DEFAULT_MASTERS=[];
 async function seedMasters(){
-  const all=await dbAll('masters');if(all.length)return;
+  const all=await dbAll('masters');
   for(const [kind,canonical,aliases] of DEFAULT_MASTERS){
-    await dbPut('masters',{id:uid(kind),kind,canonical,canonicalKey:norm(canonical),aliases,active:true,createdAt:now(),lastUsedAt:null,redirectTo:null});
+    const keys=[canonical,...aliases].map(norm);
+    let rec=all.find(x=>x.kind===kind&&x.active&&x.canonicalKey===norm(canonical));
+    if(!rec)rec=all.find(x=>x.kind===kind&&x.active&&keys.includes(x.canonicalKey));
+    if(rec){
+      const oldCanonical=rec.canonical;
+      rec.canonical=canonical;rec.canonicalKey=norm(canonical);
+      rec.aliases=[...(rec.aliases||[]),...(norm(oldCanonical)===norm(canonical)?[]:[oldCanonical]),...aliases]
+        .filter((x,i,a)=>norm(x)!==norm(canonical)&&a.findIndex(y=>norm(y)===norm(x))===i);
+      await dbPut('masters',rec);
+    }else{
+      rec={id:uid(kind),kind,canonical,canonicalKey:norm(canonical),aliases,active:true,createdAt:now(),lastUsedAt:null,redirectTo:null};
+      await dbPut('masters',rec);all.push(rec);
+    }
   }
 }
 function levenshtein(a,b){
@@ -592,6 +603,17 @@ async function masterMap(){
 function canonicalVenueNames(master){
   return[master.canonical,...(master.aliases||[])].map(norm);
 }
+function venueMasterForName(name,masters){
+  const key=norm(name);
+  return Object.values(masters).find(x=>x.kind==='venue'&&x.active&&canonicalVenueNames(x).includes(key))||null;
+}
+function storeOrganicActual(e){
+  return nval(e&&e.mnp&&e.mnp.channels&&e.mnp.channels.store)+nval(e&&e.new&&e.new.channels&&e.new.channels.store);
+}
+function hasRateBlockingIssue(report,codes){
+  const wanted=new Set(codes);
+  return (report&&report.issues||[]).some(x=>x.level==='error'&&wanted.has(x.code));
+}
 function scheduleContext(master,date){
   const names=canonicalVenueNames(master);
   const row=(D.schedule||[]).find(x=>x.date===date&&names.includes(norm(x.venue)));
@@ -599,34 +621,80 @@ function scheduleContext(master,date){
 }
 async function rateRows(){
   const reports=(await dbAll('reports')).filter(x=>x.active),masters=await masterMap();
+  const zeroMeta=await dbGet('meta','confirmed_store_zeros');
+  const excludedMeta=await dbGet('meta','store_rate_excluded');
+  const excludedStores=new Set((excludedMeta&&Array.isArray(excludedMeta.value)?excludedMeta.value:[]).map(norm));
   const dates=reports.map(x=>x.reportDate).sort();if(!dates.length)return[];
-  const last=localDate(dates[dates.length-1]),cut=new Date(last.getTime()-59*DAY_MS),cutIso=isoDate(cut);
+  const lastIso=dates[dates.length-1],last=localDate(lastIso),cut=new Date(last.getTime()-59*DAY_MS),cutIso=isoDate(cut);
   const events=reports.filter(x=>x.type==='event'&&x.reportDate>=cutIso);
   const stores=reports.filter(x=>x.type==='store'&&x.reportDate>=cutIso);
-  const venueGross={};const groups={};const confirmed={};
+  const groups={},scheduleIndex={};
+  for(const row of D.schedule||[]){
+    if(row.venue==='店舗'||row.date<cutIso||row.date>lastIso)continue;
+    const m=venueMasterForName(row.venue,masters);if(!m)continue;
+    const day=typeof dayType==='function'?dayType(row.date):(['0','6'].includes(String(localDate(row.date).getDay()))?'土日':'平日');
+    const cond=row.cond||'',k=[m.id,day,cond].join('|');
+    if(!groups[k])groups[k]={rowType:'venue',venueId:m.id,venue:m.canonical,day,cond,dates:new Set(),scheduleNames:new Set(),gross:0,eventDates:new Set(),confirmed:0,confirmedOnEventDates:0,unassigned:0};
+    groups[k].dates.add(row.date);groups[k].scheduleNames.add(row.venue);
+    const ik=[row.date,m.id].join('|');(scheduleIndex[ik]=scheduleIndex[ik]||[]).push(k);
+  }
   for(const r of events){
+    if(hasRateBlockingIssue(r,['event_total_missing','event_total_mismatch','event_products_missing']))continue;
     const e=r.parsed,m=masters[e.venue.id];if(!m)continue;const ctx=scheduleContext(m,r.reportDate),k=[m.id,ctx.day,ctx.cond].join('|');
-    if(!groups[k])groups[k]={venueId:m.id,venue:m.canonical,day:ctx.day,cond:ctx.cond,dates:new Set(),gross:0};
-    groups[k].dates.add(r.reportDate);groups[k].gross+=e.eligibleGross;venueGross[m.id]=(venueGross[m.id]||0)+e.eligibleGross;
+    if(!groups[k])groups[k]={rowType:'venue',venueId:m.id,venue:m.canonical,day:ctx.day,cond:ctx.cond,dates:new Set([r.reportDate]),scheduleNames:new Set([m.canonical]),gross:0,eventDates:new Set(),confirmed:0,confirmedOnEventDates:0,unassigned:0};
+    groups[k].gross+=e.eligibleGross;groups[k].eventDates.add(r.reportDate);
   }
   for(const r of stores){
+    if(hasRateBlockingIssue(r,['category_sum','daily_sum','allocation_sum']))continue;
     const e=r.parsed;
     for(const cat of [e.mnp,e.new]){
       for(const typ of ['instant','later'])for(const a of(cat.allocations[typ]||[])){
-        if(a.venue.id)confirmed[a.venue.id]=(confirmed[a.venue.id]||0)+a.count;
+        if(!a.venue.id)continue;
+        const keys=scheduleIndex[[r.reportDate,a.venue.id].join('|')]||[];
+        if(keys.length===1){
+          const g=groups[keys[0]];g.confirmed+=a.count;
+          if(g.eventDates.has(r.reportDate))g.confirmedOnEventDates+=a.count;
+        }else{
+          for(const g of Object.values(groups))if(g.venueId===a.venue.id)g.unassigned+=a.count;
+        }
       }
     }
   }
-  return Object.values(groups).map(g=>{
-    const days=g.dates.size,acqRate=days?g.gross/days:0,rawOpen=venueGross[g.venueId]?(confirmed[g.venueId]||0)/venueGross[g.venueId]:0;
-    const bounded=Math.max(0,Math.min(1,rawOpen)),suggested=Math.round(acqRate*bounded*10)/10;
+  const venueRows=Object.values(groups).map(g=>{
+    const days=g.dates.size,eventDays=g.eventDates.size,acqRate=eventDays?g.gross/eventDays:null;
+    const rawOpen=g.gross?g.confirmedOnEventDates/g.gross:null;
+    const suggested=Math.round((days?g.confirmed/days:0)*10)/10;
     let current=null,venueName=null;
     const m=masters[g.venueId];if(m){
-      const names=canonicalVenueNames(m);
-      for(const r of D.regions||[])for(const v of(r.venues||[]))if(names.includes(norm(v.name))){venueName=v.name;const sl=(v.slots||[]).find(x=>x.day===g.day&&(x.cond||'')===g.cond);if(sl)current=sl.rate;}
+      const scheduleNames=[...g.scheduleNames].map(norm);
+      for(const r of D.regions||[])for(const v of(r.venues||[]))if(scheduleNames.includes(norm(v.name))){venueName=v.name;const sl=(v.slots||[]).find(x=>x.day===g.day&&(x.cond||'')===g.cond);if(sl)current=sl.rate;}
     }
-    return{...g,days,acqRate,confirmed:confirmed[g.venueId]||0,openingRate:rawOpen,suggested,current,venueName,qualified:days>=3&&g.gross>=10,anomaly:rawOpen>1};
-  }).sort((a,b)=>a.venue.localeCompare(b.venue,'ja')||a.day.localeCompare(b.day,'ja'));
+    return{...g,days,eventDays,acqRate,openingRate:rawOpen,suggested,current,venueName,qualified:days>=3,anomaly:rawOpen!=null&&rawOpen>1};
+  });
+  const storeGroups={};
+  for(const r of stores){
+    const e=r.parsed,m=masters[e.store&&e.store.id];if(!m||excludedStores.has(norm(m.canonical)))continue;
+    if(!storeGroups[m.id])storeGroups[m.id]={rowType:'store',storeId:m.id,store:m.canonical,dates:new Set(),gross:0,excluded:0};
+    if(hasRateBlockingIssue(r,['missing_MNP','missing_新規','category_sum','daily_sum'])){storeGroups[m.id].excluded++;continue;}
+    storeGroups[m.id].dates.add(r.reportDate);storeGroups[m.id].gross+=storeOrganicActual(e);
+  }
+  for(const z of zeroMeta&&Array.isArray(zeroMeta.value)?zeroMeta.value:[]){
+    if(!z||z.date<cutIso)continue;
+    const m=Object.values(masters).find(x=>x.kind==='store'&&x.active&&norm(x.canonical)===norm(z.store));
+    if(!m||excludedStores.has(norm(m.canonical)))continue;
+    if(!storeGroups[m.id])storeGroups[m.id]={rowType:'store',storeId:m.id,store:m.canonical,dates:new Set(),gross:0,excluded:0};
+    storeGroups[m.id].dates.add(z.date);
+  }
+  const storeRegion=(D.regions||[]).find(x=>x.isStore),storeRates=storeRegion&&storeRegion.storeRates||{};
+  const storeRows=Object.values(storeGroups).map(g=>{
+    const days=g.dates.size,suggested=Math.round((days?g.gross/days:0)*10)/10;
+    return{...g,days,acqRate:suggested,suggested,current:storeRates[g.store],qualified:days>=7,anomaly:false};
+  });
+  return[...venueRows,...storeRows].sort((a,b)=>{
+    if(a.rowType!==b.rowType)return a.rowType==='store'?-1:1;
+    const an=a.rowType==='store'?a.store:a.venue,bn=b.rowType==='store'?b.store:b.venue;
+    return an.localeCompare(bn,'ja')||String(a.day||'').localeCompare(String(b.day||''),'ja');
+  });
 }
 async function applySuggested(venueId,day,cond,rate){
   const masters=await masterMap(),m=masters[venueId];if(!m)return;const names=canonicalVenueNames(m);let slot=null;
@@ -634,12 +702,28 @@ async function applySuggested(venueId,day,cond,rate){
   if(!slot){toast('対応する既存レート行が見つかりません');return;}
   const before=slot.rate;slot.rate=Number(rate);renderAll();await audit('rate_approve',venueId,'推奨レートを承認',{venue:m.canonical,day,cond,before,after:slot.rate});await renderDataManager();toast('推奨レートを反映しました');
 }
+async function applyStoreSuggested(storeName,rate){
+  const r=(D.regions||[]).find(x=>x.isStore);if(!r)return;
+  r.storeRates=r.storeRates||{};r.storeRates[storeName]=Number(rate)||0;
+  r.storeCount=Object.keys(r.storeRates).length;
+  r.storeRate=Math.round(Object.values(r.storeRates).reduce((a,x)=>a+(Number(x)||0),0)*10)/10;
+  if(typeof save==='function')save();renderAll();
+  await audit('store_rate_approve',storeName,'店舗別推奨レートを承認',{store:storeName,rate:r.storeRates[storeName],aggregate:r.storeRate});
+  await renderDataManager();toast('店舗別レートを反映しました');
+}
 async function renderRateAnalysis(){
   const el=document.getElementById('rateAnalysis');if(!el)return;const rows=await rateRows();
-  if(!rows.length){el.innerHTML='<p class="note">レート分析に使えるイベント報告がまだありません。</p>';return;}
-  el.innerHTML='<table><thead><tr><th>会場・条件</th><th class="r">獲得/日</th><th class="r">開通率</th><th class="r">推奨</th><th></th></tr></thead><tbody>'+rows.map(r=>{
-    const openPct=Math.round(r.openingRate*1000)/10;const note=!r.qualified?'参考値':r.anomaly?'要確認':'推奨';
-    return`<tr><td>${esc(r.venue)}<br><span class="muted">${esc(r.day+(r.cond?'・'+r.cond:''))}／${r.days}日・${r.gross}件</span></td><td class="r">${r.acqRate.toFixed(1)}</td><td class="r">${openPct}%</td><td class="r"><b>${r.suggested}</b><br><span class="muted">${note}</span></td><td>${r.qualified&&!r.anomaly&&r.current!=null?`<button class="btn sm" onclick="PACEV12.applySuggested('${r.venueId}','${esc(r.day)}','${esc(r.cond)}',${r.suggested})">反映</button>`:''}</td></tr>`;
+  if(!rows.length){el.innerHTML='<p class="note">レート分析に使える報告がまだありません。</p>';return;}
+  el.innerHTML='<table><thead><tr><th>種別・対象</th><th class="r">実績/日</th><th class="r">イベント補足</th><th class="r">推奨</th><th></th></tr></thead><tbody>'+rows.map(r=>{
+    const note=!r.qualified?'参考値':r.anomaly?'要確認':'推奨';
+    if(r.rowType==='store'){
+      const excluded=r.excluded?`・不一致${r.excluded}日除外`:'';
+      return`<tr><td><span class="tag">店舗</span> ${esc(r.store)}<br><span class="muted">${r.days}報告日・店舗内実績${r.gross}件${excluded}（会場換算店舗を除外）</span></td><td class="r">${r.acqRate.toFixed(1)}</td><td class="r">—</td><td class="r"><b>${r.suggested}</b><br><span class="muted">${note}</span></td><td>${r.qualified?`<button class="btn sm" onclick="PACEV12.applyStoreSuggested('${esc(r.store)}',${r.suggested})">反映</button>`:''}</td></tr>`;
+    }
+    const openPct=r.openingRate==null?null:Math.round(r.openingRate*1000)/10;
+    const eventInfo=r.acqRate==null?'報告なし':`${r.acqRate.toFixed(1)}件/日・${openPct}%`;
+    const unassigned=r.unassigned?`・日付未帰属${r.unassigned}件`:'';
+    return`<tr><td><span class="tag">会場</span> ${esc(r.venue)}<br><span class="muted">${esc(r.day+(r.cond?'・'+r.cond:''))}／予定${r.days}日・帰属${r.confirmed}件${unassigned}</span></td><td class="r">${r.suggested.toFixed(1)}</td><td class="r">${eventInfo}</td><td class="r"><b>${r.suggested}</b><br><span class="muted">${note}</span></td><td>${r.qualified&&!r.anomaly&&r.current!=null?`<button class="btn sm" onclick="PACEV12.applySuggested('${r.venueId}','${esc(r.day)}','${esc(r.cond)}',${r.suggested})">反映</button>`:''}</td></tr>`;
   }).join('')+'</tbody></table>';
 }
 
@@ -756,9 +840,9 @@ async function boot(){
 const api={
   parseReport,savePreview,chooseResolution,renderHistory,
   addMasterFromForm,editMaster,addAliasToMaster,toggleMaster,mergeMaster,removeMaster,renderMasters,
-  renderDataManager,applySuggested,downloadBackup,previewRestore,executeRestore,
+  renderDataManager,applySuggested,applyStoreSuggested,downloadBackup,previewRestore,executeRestore,
   _test:{
-    parseStoreRaw,parseEventRaw,parseCumulativeRaw,parseAllocationText,classifyProduct,stable,
+    parseStoreRaw,parseEventRaw,parseCumulativeRaw,parseAllocationText,classifyProduct,storeOrganicActual,hasRateBlockingIssue,stable,
     collectBackupData,encryptBackup,decryptBackup,replaceDatabase,counts,rateRows
   }
 };

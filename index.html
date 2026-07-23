@@ -379,7 +379,7 @@
         <div><label class="f">祝日（任意・カンマ区切り YYYY-MM-DD）</label><input id="importHol" placeholder="2026-08-11"></div>
         <div style="display:flex;align-items:flex-end"><label style="font-size:12px;color:var(--muted)"><input type="checkbox" id="importReset" checked style="width:auto;margin-right:6px">実績・目標もリセット</label></div>
       </div>
-      <textarea id="importArea" spellcheck="false" placeholder='[ {"date":"2026-08-01","day":"土","venues":["MOP","店舗"]}, ... ]'></textarea>
+      <textarea id="importArea" spellcheck="false" placeholder='[ {"date":"2026-08-01","day":"土","venues":["サンプル会場","店舗"]}, ... ]'></textarea>
       <div class="copybar" style="margin-top:10px"><button class="btn ok" onclick="importSchedule()">スケジュールを取込</button></div>
       <p class="note" id="importMsg"></p>
       <div class="divider"></div>
@@ -450,7 +450,7 @@
     </div>
     <div class="card">
       <h2>レート分析 <span class="tag">直近60日・承認式</span></h2>
-      <p class="note">イベント獲得数と、店舗報告で会場へ帰属できた開通数を足しません。獲得レート×開通率で推奨レートを算出します。</p>
+      <p class="note">会場はスケジュール上の予定日数と、店舗報告で会場へ帰属した実績から条件別に算出します。イベント報告がある日は獲得数・開通率も補足し、二重加算しません。店舗は「店舗」内訳だけで店舗別に算出し、会場換算する店舗は店舗別レートから除外します。</p>
       <div id="rateAnalysis"></div>
     </div>
     <div class="card">
@@ -502,12 +502,12 @@
 
   // 会場マスタ（レート＝1日あたりの件数。土日/平日・条件ごと）
   "regions": [
-    { "name":"札幌", "category":"外販", "venues":[
-      { "name":"三井", "slots":[ {"day":"土日","cond":"","rate":30} ] },
-      { "name":"アークス菊水", "slots":[
-        {"day":"土日","cond":"リスポーン様あり","rate":3.5},
-        {"day":"平日","cond":"リスポーン様あり","rate":3},
-        {"day":"平日","cond":"リスポーン様なし","rate":1} ] }
+    { "name":"サンプル地域", "category":"外販", "venues":[
+      { "name":"サンプル会場A", "slots":[ {"day":"土日","cond":"","rate":3} ] },
+      { "name":"サンプル会場B", "slots":[
+        {"day":"土日","cond":"リスポーン有","rate":3.5},
+        {"day":"平日","cond":"リスポーン有","rate":3},
+        {"day":"平日","cond":"リスポーン無","rate":1} ] }
     ]},
     // 店舗は集計表示（isStore）。storeRate＝6店舗合計の1日件数
     { "name":"店舗", "category":"店舗", "isStore":true, "storeCount":6, "storeRate":12 }
@@ -515,8 +515,8 @@
 
   // 予定：日付×会場×条件（同じ日に複数会場を並べる）
   "schedule": [
-    {"date":"2025-06-28","venue":"三井","cond":""},
-    {"date":"2025-06-28","venue":"アークス菊水","cond":"リスポーン様あり"},
+    {"date":"2025-06-28","venue":"サンプル会場A","cond":""},
+    {"date":"2025-06-28","venue":"サンプル会場B","cond":"リスポーン有"},
     {"date":"2025-06-23","venue":"店舗","cond":""}
   ],
 
@@ -533,6 +533,10 @@
 <script>
 /* ===================== Engine ===================== */
 const WK=['日','月','火','水','木','金','土'];
+function storeRateNames(d){
+  const r=(d&&d.regions||[]).find(x=>x.isStore);
+  return Object.keys(r&&r.storeRates||{});
+}
 function parseD(s){const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d);}
 function fmtMD(s){const dt=parseD(s);return(dt.getMonth()+1)+'/'+dt.getDate();}
 function wd(s){return WK[parseD(s).getDay()];}
@@ -544,10 +548,7 @@ function canonCond(venue,cond,dt){
   if(cond==='外販有')return'外販有';
   if(cond==='リスポーン有')return'リスポーン有';
   if(cond==='リスポーン+催事有')return'リスポーン+催事有';
-  if(venue==='メガ')return'外販無';
-  if(venue==='アークス室蘭')return'外販無';
-  if(venue==='アークス菊水'||venue==='ビッグ清田')return'リスポーン無';
-  return'';
+  return cond||'';
 }
 function horizonEnd(D){const me=monthEnd(D.month);const t=D.targetDate;return(t&&t<me)?t:me;}
 function addDays(s,n){const dt=parseD(s);dt.setDate(dt.getDate()+n);return iso(dt);}
@@ -578,7 +579,11 @@ function computePlan(D,basis,mult){
     const lines=[];let regionTotal=0;
     if(r.isStore){
       const n=D.schedule.filter(e=>e.venue===(r.storeVenue||'店舗')&&e.date>basis&&e.date<=end).length;
-      if(n>0){const rate=r.storeRate*mult;const sub=n*rate;lines.push({store:true,days:n,count:r.storeCount,rate,sub});regionTotal=sub;}
+      if(n>0){
+        const rate=r.storeRate*mult,sub=n*rate;
+        const storeBreakdown=Object.keys(r.storeRates||{}).map(name=>({name,rate:(Number(r.storeRates[name])||0)*mult}));
+        lines.push({store:true,days:n,count:r.storeCount,rate,sub,storeBreakdown});regionTotal=sub;
+      }
     }else{
       for(const v of(r.venues||[])){
         for(const sl of v.slots){
@@ -648,7 +653,12 @@ function renderManagerText(D,basis,R){
     let s2=`■${r.name}\n\n`;
     for(const ln of r.lines){
       if(!ln.subInt)continue;
-      if(ln.store){s2+=`■残${ln.days}日間\n\n・${ln.count}店舗\n${num(ln.rateInt)}件/日＝${num(ln.subInt)}件\n\n`;continue;}
+      if(ln.store){
+        s2+=`■残${ln.days}日間\n\n`;
+        (ln.storeBreakdown||[]).forEach(x=>{s2+=`・${x.name}：${num(x.targetInt)}件（${r1(x.rateAdjusted)}件/日）\n`;});
+        s2+=`\n店舗合計${num(ln.subInt)}件\n\n`;
+        continue;
+      }
       const cond=ln.cond?`（${ln.cond}）`:'';
       s2+=`・${ln.venue}（${ln.day}）残${ln.days}日間${cond}\n${num(ln.rateInt)}件/日＝${num(ln.subInt)}件\n\n`;
     }
@@ -656,7 +666,15 @@ function renderManagerText(D,basis,R){
   };
   if(gaiban.length){o+='【外販】\n\n';gaiban.forEach(r=>o+=block(r));}
   other.forEach(r=>o+=block(r));
-  if(store.length){o+='【店舗】\n\n';store.forEach(r=>r.lines.forEach(ln=>{if(ln.subInt)o+=`■残${ln.days}日間\n\n・${ln.count}店舗\n${num(ln.rateInt)}件/日＝${num(ln.subInt)}件\n\n`;}));}
+  if(store.length){
+    o+='【店舗】\n\n';
+    store.forEach(r=>r.lines.forEach(ln=>{
+      if(!ln.subInt)return;
+      o+=`■残${ln.days}日間\n\n`;
+      (ln.storeBreakdown||[]).forEach(x=>{o+=`・${x.name}：${num(x.targetInt)}件（${r1(x.rateAdjusted)}件/日）\n`;});
+      o+=`\n店舗合計${num(ln.subInt)}件\n\n`;
+    }));
+  }
   o+=`総合計${num(R.total)}件\n\n`;
   o+=`■実行計画${num(D.goal)}件に対して\n\n`;
   o+=`${fmtMD(basis)}迄の実績：${num(cum)}件\n\n`;
@@ -716,6 +734,13 @@ function normalize(raw){
   d.pipeline.rate=(d.pipeline.ratePct!=null?d.pipeline.ratePct:100)/100;
   d.forecasts=d.forecasts||[];
   d.regions=d.regions||[];
+  const storeRegion=d.regions.find(r=>r.isStore);
+  if(storeRegion){
+    storeRegion.storeRates=storeRegion.storeRates||{};
+    const names=Object.keys(storeRegion.storeRates);
+    storeRegion.storeCount=names.length;
+    storeRegion.storeRate=Math.round(names.reduce((a,n)=>a+(Number(storeRegion.storeRates[n])||0),0)*10)/10;
+  }
   d.schedule=d.schedule||[];
   d.actuals=d.actuals||[];
   d.holidays=d.holidays||[];
@@ -729,7 +754,7 @@ function denormalize(d){
     month:d.month,goal:d.goal,alphaPct:Math.round(d.alpha*100),
     basisDate:d.basisDate,targetDate:d.targetDate,carryIn:d.carryIn,holidays:d.holidays||[],
     pipeline:{ratePct:Math.round(d.pipeline.rate*100)},
-    regions:d.regions.map(r=>{const o={name:r.name,category:r.category};if(r.isStore){o.isStore=true;o.storeCount=r.storeCount;o.storeRate=r.storeRate;if(r.storeVenue)o.storeVenue=r.storeVenue;}else{o.venues=r.venues;}return o;}),
+    regions:d.regions.map(r=>{const o={name:r.name,category:r.category};if(r.isStore){o.isStore=true;o.storeCount=r.storeCount;o.storeRate=r.storeRate;o.storeRates=r.storeRates||{};if(r.storeVenue)o.storeVenue=r.storeVenue;}else{o.venues=r.venues;}return o;}),
     schedule:d.schedule,actuals:d.actuals,forecasts:d.forecasts||[]
   };
   return out;
@@ -774,7 +799,13 @@ function compute(D,basis){
     if(kk>cap)kk=cap;
     k=kk; if(realized(k)<target)capped=true;
   }
-  flat.forEach(l=>{l.rateInt=Math.round(l.rate*k); l.subInt=l.rateInt*l.days;});
+  flat.forEach(l=>{
+    l.rateInt=Math.round(l.rate*k);l.subInt=l.rateInt*l.days;
+    if(l.store&&l.storeBreakdown){
+      const targets=apportion(l.storeBreakdown.map(x=>x.rate),l.subInt);
+      l.storeBreakdown.forEach((x,i)=>{x.targetInt=targets[i];x.rateAdjusted=x.days?targets[i]/l.days:0;});
+    }
+  });
   plan.regions.forEach(r=>{r.totalInt=r.lines.reduce((a,l)=>a+l.subInt,0);});
   const total=flat.reduce((a,l)=>a+l.subInt,0);
   const dts=dayTargets(D,basis);
@@ -1087,38 +1118,8 @@ document.getElementById('sDate').addEventListener('change',renderCondSelect);
 
 /* ===================== Sample data (June example) ===================== */
 function sampleData(){
-  const sched=[];
-  const add=(date,venue,cond='')=>sched.push({date,venue,cond});
-  for(const d of['2025-06-28','2025-06-29']){add(d,'三井');add(d,'アークス菊水','リスポーン様あり');add(d,'ビッグ清田','リスポーン様あり');add(d,'メガ','外販なし');add(d,'アークス室蘭');}
-  for(const d of['2025-06-23','2025-06-24','2025-06-25','2025-06-26']){add(d,'アークス菊水','リスポーン様あり');add(d,'ビッグ清田','リスポーン様あり');add(d,'メガ','外販あり');}
-  for(const d of['2025-06-27','2025-06-30']){add(d,'アークス菊水','リスポーン様なし');add(d,'ビッグ清田','リスポーン様なし');add(d,'メガ','外販なし');}
-  for(const d of['2025-06-23','2025-06-24','2025-06-25'])add(d,'アークス室蘭','外販あり');
-  for(const d of['2025-06-26','2025-06-27','2025-06-30'])add(d,'アークス室蘭','外販なし');
-  add('2025-06-23','ツルハ');
-  for(const d of['2025-06-23','2025-06-24','2025-06-25','2025-06-26','2025-06-27','2025-06-28','2025-06-29','2025-06-30'])add(d,'店舗');
-  return{
-    month:'2025-06',goal:700,alphaPct:30,basisDate:'2025-06-22',
-    carryIn:{asOf:'2025-06-22',cum:367},
-    pipeline:{raw:28,ratePct:80},
-    regions:[
-      {name:'札幌',category:'外販',venues:[
-        {name:'三井',slots:[{day:'土日',cond:'',rate:30}]},
-        {name:'アークス菊水',slots:[{day:'土日',cond:'リスポーン様あり',rate:3.5},{day:'平日',cond:'リスポーン様あり',rate:3},{day:'平日',cond:'リスポーン様なし',rate:1}]},
-        {name:'ビッグ清田',slots:[{day:'土日',cond:'リスポーン様あり',rate:4},{day:'平日',cond:'リスポーン様あり',rate:4},{day:'平日',cond:'リスポーン様なし',rate:1}]},
-      ]},
-      {name:'苫小牧',category:'外販',venues:[
-        {name:'メガ',slots:[{day:'土日',cond:'外販なし',rate:7},{day:'平日',cond:'外販あり',rate:11},{day:'平日',cond:'外販なし',rate:2}]},
-      ]},
-      {name:'室蘭',category:'外販',venues:[
-        {name:'アークス室蘭',slots:[{day:'土日',cond:'',rate:6},{day:'平日',cond:'外販あり',rate:8},{day:'平日',cond:'外販なし',rate:2}]},
-      ]},
-      {name:'リスポーン',category:'外販',venues:[
-        {name:'ツルハ',slots:[{day:'平日',cond:'',rate:4}]},
-      ]},
-      {name:'店舗',category:'店舗',isStore:true,storeCount:6,storeRate:12},
-    ],
-    schedule:sched,actuals:[]
-  };
+  const month='2026-07';
+  return {month,goal:100,alphaPct:30,basisDate:month+'-01',targetDate:month+'-31',carryIn:{asOf:'2026-06-30',cum:0},pipeline:{ratePct:80},regions:[{name:'サンプル',category:'外販',venues:[{name:'サンプル会場',slots:[{day:'平日',cond:'',rate:1}]}]},{name:'店舗',category:'店舗',isStore:true,storeCount:1,storeRate:1,storeRates:{'サンプル店舗':1}}],schedule:[],actuals:[],forecasts:[]};
 }
 function loadSample(){D=normalize(sampleData());fillSettings();renderAll();toast('6月サンプルを読み込みました');switchTab('day');}
 
@@ -1129,1093 +1130,11 @@ function save(){try{localStorage.setItem(LS_KEY,JSON.stringify(denormalize(D)));
 /* ===================== July 2026 data (one-tap load) ===================== */
 function julyData(){
   return {
-  "month": "2026-07",
-  "goal": 832,
-  "alphaPct": 30,
-  "basisDate": "2026-06-30",
-  "holidays": [
-    "2026-07-20"
-  ],
-  "carryIn": {
-    "asOf": "2026-06-30",
-    "cum": 0
-  },
-  "pipeline": {
-    "raw": 0,
-    "ratePct": 80
-  },
-  "regions": [
-    {
-      "name": "札幌",
-      "category": "外販",
-      "venues": [
-        {
-          "name": "アークス菊水",
-          "slots": [
-            {
-              "day": "土日",
-              "cond": "リスポーン様あり",
-              "rate": 3.5
-            },
-            {
-              "day": "土日",
-              "cond": "リスポーン様なし",
-              "rate": 0.5
-            },
-            {
-              "day": "平日",
-              "cond": "リスポーン様あり",
-              "rate": 5
-            },
-            {
-              "day": "平日",
-              "cond": "リスポーン様なし",
-              "rate": 1
-            }
-          ]
-        },
-        {
-          "name": "ビッグ清田",
-          "slots": [
-            {
-              "day": "土日",
-              "cond": "リスポーン+催事有",
-              "rate": 4
-            },
-            {
-              "day": "土日",
-              "cond": "リスポーン有",
-              "rate": 3
-            },
-            {
-              "day": "平日",
-              "cond": "リスポーン+催事有",
-              "rate": 3
-            },
-            {
-              "day": "平日",
-              "cond": "リスポーン有",
-              "rate": 2
-            },
-            {
-              "day": "平日",
-              "cond": "リスポーン様なし",
-              "rate": 1
-            }
-          ]
-        },
-        {
-          "name": "MOP",
-          "slots": [
-            {
-              "day": "土日",
-              "cond": "",
-              "rate": 25
-            }
-          ]
-        },
-        {
-          "name": "MOP(セブン)",
-          "slots": [
-            {
-              "day": "土日",
-              "cond": "",
-              "rate": 10
-            }
-          ]
-        },
-        {
-          "name": "アーニス",
-          "slots": [
-            {
-              "day": "平日",
-              "cond": "",
-              "rate": 3
-            }
-          ]
-        },
-        {
-          "name": "コープ",
-          "slots": [
-            {
-              "day": "平日",
-              "cond": "",
-              "rate": 1
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "苫小牧",
-      "category": "外販",
-      "venues": [
-        {
-          "name": "メガ",
-          "slots": [
-            {
-              "day": "土日",
-              "cond": "外販あり",
-              "rate": 5
-            },
-            {
-              "day": "土日",
-              "cond": "外販なし",
-              "rate": 4.6
-            },
-            {
-              "day": "平日",
-              "cond": "外販あり",
-              "rate": 5.4
-            },
-            {
-              "day": "平日",
-              "cond": "外販なし",
-              "rate": 1.5
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "室蘭",
-      "category": "外販",
-      "venues": [
-        {
-          "name": "アークス室蘭",
-          "slots": [
-            {
-              "day": "土日",
-              "cond": "",
-              "rate": 2.25
-            },
-            {
-              "day": "平日",
-              "cond": "外販あり",
-              "rate": 2.5
-            },
-            {
-              "day": "平日",
-              "cond": "外販なし",
-              "rate": 1.75
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "リスポーン",
-      "category": "外販",
-      "venues": [
-        {
-          "name": "ツルハ",
-          "slots": [
-            {
-              "day": "土日",
-              "cond": "",
-              "rate": 1.5
-            },
-            {
-              "day": "平日",
-              "cond": "",
-              "rate": 2.6
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "店舗",
-      "category": "店舗",
-      "isStore": true,
-      "storeCount": 6,
-      "storeRate": 6
-    }
-  ],
-  "schedule": [
-    {
-      "date": "2026-07-01",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン様なし"
-    },
-    {
-      "date": "2026-07-01",
-      "venue": "アークス室蘭",
-      "cond": "外販なし"
-    },
-    {
-      "date": "2026-07-01",
-      "venue": "メガ",
-      "cond": "外販なし"
-    },
-    {
-      "date": "2026-07-01",
-      "venue": "店舗",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-02",
-      "venue": "アークス菊水",
-      "cond": "リスポーン様なし"
-    },
-    {
-      "date": "2026-07-02",
-      "venue": "アークス室蘭",
-      "cond": "外販あり"
-    },
-    {
-      "date": "2026-07-02",
-      "venue": "メガ",
-      "cond": "外販あり"
-    },
-    {
-      "date": "2026-07-02",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン様なし"
-    },
-    {
-      "date": "2026-07-02",
-      "venue": "店舗",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-03",
-      "venue": "メガ",
-      "cond": "外販あり"
-    },
-    {
-      "date": "2026-07-03",
-      "venue": "アークス室蘭",
-      "cond": "外販あり"
-    },
-    {
-      "date": "2026-07-03",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン有"
-    },
-    {
-      "date": "2026-07-03",
-      "venue": "アークス菊水",
-      "cond": "リスポーン様なし"
-    },
-    {
-      "date": "2026-07-03",
-      "venue": "ツルハ",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-03",
-      "venue": "店舗",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-04",
-      "venue": "MOP",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-04",
-      "venue": "MOP(セブン)",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-04",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン有"
-    },
-    {
-      "date": "2026-07-04",
-      "venue": "アークス菊水",
-      "cond": "リスポーン様なし"
-    },
-    {
-      "date": "2026-07-04",
-      "venue": "ツルハ",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-04",
-      "venue": "アークス室蘭",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-04",
-      "venue": "メガ",
-      "cond": "外販なし"
-    },
-    {
-      "date": "2026-07-04",
-      "venue": "店舗",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-05",
-      "venue": "MOP",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-05",
-      "venue": "MOP(セブン)",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-05",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン有"
-    },
-    {
-      "date": "2026-07-05",
-      "venue": "アークス菊水",
-      "cond": "リスポーン様なし"
-    },
-    {
-      "date": "2026-07-05",
-      "venue": "ツルハ",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-05",
-      "venue": "アークス室蘭",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-05",
-      "venue": "メガ",
-      "cond": "外販なし"
-    },
-    {
-      "date": "2026-07-05",
-      "venue": "店舗",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-06",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン有"
-    },
-    {
-      "date": "2026-07-06",
-      "venue": "アーニス",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-06",
-      "venue": "メガ",
-      "cond": "外販あり"
-    },
-    {
-      "date": "2026-07-06",
-      "venue": "アークス菊水",
-      "cond": "リスポーン様なし"
-    },
-    {
-      "date": "2026-07-06",
-      "venue": "ツルハ",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-06",
-      "venue": "アークス室蘭",
-      "cond": "外販なし"
-    },
-    {
-      "date": "2026-07-06",
-      "venue": "店舗",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-07",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン有"
-    },
-    {
-      "date": "2026-07-07",
-      "venue": "アーニス",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-07",
-      "venue": "メガ",
-      "cond": "外販あり"
-    },
-    {
-      "date": "2026-07-07",
-      "venue": "アークス菊水",
-      "cond": "リスポーン様なし"
-    },
-    {
-      "date": "2026-07-07",
-      "venue": "ツルハ",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-07",
-      "venue": "アークス室蘭",
-      "cond": "外販なし"
-    },
-    {
-      "date": "2026-07-07",
-      "venue": "店舗",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-08",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン様なし"
-    },
-    {
-      "date": "2026-07-08",
-      "venue": "メガ",
-      "cond": "外販なし"
-    },
-    {
-      "date": "2026-07-09",
-      "venue": "メガ",
-      "cond": "外販あり"
-    },
-    {
-      "date": "2026-07-09",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン様なし"
-    },
-    {
-      "date": "2026-07-09",
-      "venue": "アークス室蘭",
-      "cond": "外販なし"
-    },
-    {
-      "date": "2026-07-09",
-      "venue": "店舗",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-10",
-      "venue": "メガ",
-      "cond": "外販あり"
-    },
-    {
-      "date": "2026-07-10",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン有"
-    },
-    {
-      "date": "2026-07-10",
-      "venue": "アークス菊水",
-      "cond": "リスポーン様あり"
-    },
-    {
-      "date": "2026-07-10",
-      "venue": "アークス室蘭",
-      "cond": "外販なし"
-    },
-    {
-      "date": "2026-07-10",
-      "venue": "店舗",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-11",
-      "venue": "MOP",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-11",
-      "venue": "MOP(セブン)",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-11",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン有"
-    },
-    {
-      "date": "2026-07-11",
-      "venue": "アークス菊水",
-      "cond": "リスポーン様あり"
-    },
-    {
-      "date": "2026-07-11",
-      "venue": "アークス室蘭",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-11",
-      "venue": "メガ",
-      "cond": "外販なし"
-    },
-    {
-      "date": "2026-07-11",
-      "venue": "店舗",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-12",
-      "venue": "MOP",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-12",
-      "venue": "MOP(セブン)",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-12",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン有"
-    },
-    {
-      "date": "2026-07-12",
-      "venue": "アークス菊水",
-      "cond": "リスポーン様あり"
-    },
-    {
-      "date": "2026-07-12",
-      "venue": "アークス室蘭",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-12",
-      "venue": "メガ",
-      "cond": "外販なし"
-    },
-    {
-      "date": "2026-07-12",
-      "venue": "店舗",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-13",
-      "venue": "アークス室蘭",
-      "cond": "外販あり"
-    },
-    {
-      "date": "2026-07-13",
-      "venue": "メガ",
-      "cond": "外販あり"
-    },
-    {
-      "date": "2026-07-13",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン有"
-    },
-    {
-      "date": "2026-07-13",
-      "venue": "アークス菊水",
-      "cond": "リスポーン様あり"
-    },
-    {
-      "date": "2026-07-13",
-      "venue": "店舗",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-14",
-      "venue": "アークス菊水",
-      "cond": "リスポーン様あり"
-    },
-    {
-      "date": "2026-07-14",
-      "venue": "アークス室蘭",
-      "cond": "外販あり"
-    },
-    {
-      "date": "2026-07-14",
-      "venue": "メガ",
-      "cond": "外販あり"
-    },
-    {
-      "date": "2026-07-14",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン有"
-    },
-    {
-      "date": "2026-07-14",
-      "venue": "店舗",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-15",
-      "venue": "メガ",
-      "cond": "外販あり"
-    },
-    {
-      "date": "2026-07-15",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン様なし"
-    },
-    {
-      "date": "2026-07-15",
-      "venue": "アークス室蘭",
-      "cond": "外販なし"
-    },
-    {
-      "date": "2026-07-15",
-      "venue": "店舗",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-16",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン様なし"
-    },
-    {
-      "date": "2026-07-16",
-      "venue": "アークス菊水",
-      "cond": "リスポーン様なし"
-    },
-    {
-      "date": "2026-07-16",
-      "venue": "コープ",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-16",
-      "venue": "アークス室蘭",
-      "cond": "外販なし"
-    },
-    {
-      "date": "2026-07-16",
-      "venue": "メガ",
-      "cond": "外販なし"
-    },
-    {
-      "date": "2026-07-16",
-      "venue": "店舗",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-17",
-      "venue": "メガ",
-      "cond": "外販あり"
-    },
-    {
-      "date": "2026-07-17",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン+催事有"
-    },
-    {
-      "date": "2026-07-17",
-      "venue": "コープ",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-17",
-      "venue": "アークス菊水",
-      "cond": "リスポーン様なし"
-    },
-    {
-      "date": "2026-07-17",
-      "venue": "ツルハ",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-17",
-      "venue": "アークス室蘭",
-      "cond": "外販なし"
-    },
-    {
-      "date": "2026-07-17",
-      "venue": "店舗",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-18",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン+催事有"
-    },
-    {
-      "date": "2026-07-18",
-      "venue": "MOP",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-18",
-      "venue": "アークス菊水",
-      "cond": "リスポーン様なし"
-    },
-    {
-      "date": "2026-07-18",
-      "venue": "ツルハ",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-18",
-      "venue": "アークス室蘭",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-18",
-      "venue": "メガ",
-      "cond": "外販なし"
-    },
-    {
-      "date": "2026-07-18",
-      "venue": "店舗",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-19",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン+催事有"
-    },
-    {
-      "date": "2026-07-19",
-      "venue": "MOP",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-19",
-      "venue": "アークス菊水",
-      "cond": "リスポーン様なし"
-    },
-    {
-      "date": "2026-07-19",
-      "venue": "ツルハ",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-19",
-      "venue": "アークス室蘭",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-19",
-      "venue": "メガ",
-      "cond": "外販なし"
-    },
-    {
-      "date": "2026-07-19",
-      "venue": "店舗",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-20",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン+催事有"
-    },
-    {
-      "date": "2026-07-20",
-      "venue": "MOP",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-20",
-      "venue": "アークス菊水",
-      "cond": "リスポーン様なし"
-    },
-    {
-      "date": "2026-07-20",
-      "venue": "ツルハ",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-20",
-      "venue": "アークス室蘭",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-20",
-      "venue": "メガ",
-      "cond": "外販なし"
-    },
-    {
-      "date": "2026-07-20",
-      "venue": "店舗",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-21",
-      "venue": "アークス菊水",
-      "cond": "リスポーン様なし"
-    },
-    {
-      "date": "2026-07-21",
-      "venue": "アークス室蘭",
-      "cond": "外販あり"
-    },
-    {
-      "date": "2026-07-21",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン+催事有"
-    },
-    {
-      "date": "2026-07-21",
-      "venue": "ツルハ",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-21",
-      "venue": "メガ",
-      "cond": "外販なし"
-    },
-    {
-      "date": "2026-07-21",
-      "venue": "店舗",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-22",
-      "venue": "アークス室蘭",
-      "cond": "外販あり"
-    },
-    {
-      "date": "2026-07-22",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン様なし"
-    },
-    {
-      "date": "2026-07-22",
-      "venue": "メガ",
-      "cond": "外販なし"
-    },
-    {
-      "date": "2026-07-22",
-      "venue": "店舗",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-23",
-      "venue": "アークス菊水",
-      "cond": "リスポーン様なし"
-    },
-    {
-      "date": "2026-07-23",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン様なし"
-    },
-    {
-      "date": "2026-07-23",
-      "venue": "アークス室蘭",
-      "cond": "外販なし"
-    },
-    {
-      "date": "2026-07-23",
-      "venue": "メガ",
-      "cond": "外販なし"
-    },
-    {
-      "date": "2026-07-23",
-      "venue": "店舗",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-24",
-      "venue": "メガ",
-      "cond": "外販あり"
-    },
-    {
-      "date": "2026-07-24",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン+催事有"
-    },
-    {
-      "date": "2026-07-24",
-      "venue": "アークス菊水",
-      "cond": "リスポーン様あり"
-    },
-    {
-      "date": "2026-07-24",
-      "venue": "アークス室蘭",
-      "cond": "外販なし"
-    },
-    {
-      "date": "2026-07-24",
-      "venue": "店舗",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-25",
-      "venue": "MOP",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-25",
-      "venue": "MOP(セブン)",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-25",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン+催事有"
-    },
-    {
-      "date": "2026-07-25",
-      "venue": "アークス菊水",
-      "cond": "リスポーン様あり"
-    },
-    {
-      "date": "2026-07-25",
-      "venue": "アークス室蘭",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-25",
-      "venue": "メガ",
-      "cond": "外販なし"
-    },
-    {
-      "date": "2026-07-25",
-      "venue": "店舗",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-26",
-      "venue": "MOP",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-26",
-      "venue": "MOP(セブン)",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-26",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン+催事有"
-    },
-    {
-      "date": "2026-07-26",
-      "venue": "アークス菊水",
-      "cond": "リスポーン様あり"
-    },
-    {
-      "date": "2026-07-26",
-      "venue": "アークス室蘭",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-26",
-      "venue": "メガ",
-      "cond": "外販なし"
-    },
-    {
-      "date": "2026-07-26",
-      "venue": "店舗",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-27",
-      "venue": "アークス菊水",
-      "cond": "リスポーン様あり"
-    },
-    {
-      "date": "2026-07-27",
-      "venue": "アークス室蘭",
-      "cond": "外販あり"
-    },
-    {
-      "date": "2026-07-27",
-      "venue": "メガ",
-      "cond": "外販あり"
-    },
-    {
-      "date": "2026-07-27",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン+催事有"
-    },
-    {
-      "date": "2026-07-27",
-      "venue": "店舗",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-28",
-      "venue": "アークス室蘭",
-      "cond": "外販あり"
-    },
-    {
-      "date": "2026-07-28",
-      "venue": "メガ",
-      "cond": "外販あり"
-    },
-    {
-      "date": "2026-07-28",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン+催事有"
-    },
-    {
-      "date": "2026-07-28",
-      "venue": "アークス菊水",
-      "cond": "リスポーン様あり"
-    },
-    {
-      "date": "2026-07-28",
-      "venue": "店舗",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-29",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン様なし"
-    },
-    {
-      "date": "2026-07-29",
-      "venue": "アークス室蘭",
-      "cond": "外販なし"
-    },
-    {
-      "date": "2026-07-29",
-      "venue": "メガ",
-      "cond": "外販なし"
-    },
-    {
-      "date": "2026-07-29",
-      "venue": "店舗",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-30",
-      "venue": "アークス菊水",
-      "cond": "リスポーン様なし"
-    },
-    {
-      "date": "2026-07-30",
-      "venue": "メガ",
-      "cond": "外販あり"
-    },
-    {
-      "date": "2026-07-30",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン様なし"
-    },
-    {
-      "date": "2026-07-30",
-      "venue": "アークス室蘭",
-      "cond": "外販なし"
-    },
-    {
-      "date": "2026-07-30",
-      "venue": "店舗",
-      "cond": ""
-    },
-    {
-      "date": "2026-07-31",
-      "venue": "メガ",
-      "cond": "外販あり"
-    },
-    {
-      "date": "2026-07-31",
-      "venue": "ビッグ清田",
-      "cond": "リスポーン有"
-    },
-    {
-      "date": "2026-07-31",
-      "venue": "アークス菊水",
-      "cond": "リスポーン様あり"
-    },
-    {
-      "date": "2026-07-31",
-      "venue": "アークス室蘭",
-      "cond": "外販なし"
-    },
-    {
-      "date": "2026-07-31",
-      "venue": "店舗",
-      "cond": ""
-    }
-  ],
-  "actuals": []
-};
+    month:'2026-07',goal:0,alphaPct:30,basisDate:'2026-07-01',targetDate:'2026-07-31',
+    carryIn:{asOf:'2026-06-30',cum:0},holidays:[],pipeline:{ratePct:80},
+    regions:[{name:'店舗',category:'店舗',isStore:true,storeCount:0,storeRate:0,storeRates:{}}],
+    schedule:[],actuals:[],forecasts:[]
+  };
 }
 function loadJuly(){D=normalize(julyData());fillSettings();renderAll();toast('7月データを読み込みました');switchTab('day');}
 
@@ -2232,10 +1151,13 @@ function renderRates(){
   for(const r of D.regions){
     ri++;
     if(r.isStore){
-      html+=`<div class="card"><h2>店舗（集計） <span class="ord"><button class="ob" onclick="moveRegionOrder(${ri},-1)">▲</button><button class="ob" onclick="moveRegionOrder(${ri},1)">▼</button></span></h2><div class="row">`+
-        `<div><label class="f">店舗数</label><input class="num" type="number" value="${r.storeCount}" onchange="setStore('count',this.value)"></div>`+
-        `<div><label class="f">1日あたり件数</label><input class="num" type="number" step="0.01" value="${r.storeRate}" onchange="setStore('rate',this.value)"></div>`+
-        `</div></div>`;
+      r.storeRates=r.storeRates||{};
+      html+=`<div class="card"><h2>店舗別レート <span class="tag">会場換算店舗を除外</span> <span class="ord"><button class="ob" onclick="moveRegionOrder(${ri},-1)">▲</button><button class="ob" onclick="moveRegionOrder(${ri},1)">▼</button></span></h2>`+
+        `<p class="note">各店舗の店舗内実績から算出します。合計${num(r.storeRate)}件/日が「店舗」の着地計算に使われます。</p>`;
+      Object.keys(r.storeRates).forEach(name=>{
+        html+=`<div class="slot"><b style="min-width:110px">${name}</b><input class="num" type="number" step="0.1" value="${Number(r.storeRates[name])||0}" onchange="setStoreRate('${name}',this.value)"><span class="unit">件/日</span></div>`;
+      });
+      html+=`</div>`;
       continue;
     }
     html+=`<div class="card"><h2>${r.name} <span class="ord"><button class="ob" onclick="moveRegionOrder(${ri},-1)">▲</button><button class="ob" onclick="moveRegionOrder(${ri},1)">▼</button></span></h2>`;
@@ -2263,7 +1185,7 @@ function moveVenue(vname,toRegion){const from=venueRegion(vname);if(!from)return
 function moveVenueOrder(vname,dir){const r=venueRegion(vname);if(!r||!r.venues)return;const i=r.venues.findIndex(v=>v.name===vname);const j=i+dir;if(i<0||j<0||j>=r.venues.length)return;const t=r.venues[i];r.venues[i]=r.venues[j];r.venues[j]=t;renderAll();}
 function moveRegionOrder(ri,dir){const j=ri+dir;if(ri<0||ri>=D.regions.length||j<0||j>=D.regions.length)return;const t=D.regions[ri];D.regions[ri]=D.regions[j];D.regions[j]=t;renderAll();}
 function fixScheduleConds(){
-  const remap={'外販あり':'外販有','外販なし':'外販無','リスポーン様あり':'リスポーン有','リスポーン様なし':'リスポーン無'};
+  const remap={'外販有':'外販有','外販無':'外販無','リスポーン有':'リスポーン有','リスポーン無':'リスポーン無'};
   let fixed=0; const unresolved=[];
   (D.schedule||[]).forEach(e=>{
     const v=findV(e.venue); if(!v)return;
@@ -2286,6 +1208,13 @@ function fixScheduleConds(){
   if(msg)msg.textContent=t; toast('スケジュール条件を同期しました');
 }
 function setStore(field,val){const r=D.regions.find(x=>x.isStore);if(!r)return;if(field==='count')r.storeCount=parseInt(val)||0;else r.storeRate=parseFloat(val)||0;renderCore();}
+function setStoreRate(name,val){
+  const r=D.regions.find(x=>x.isStore);if(!r)return;
+  r.storeRates=r.storeRates||{};r.storeRates[name]=parseFloat(val)||0;
+  r.storeCount=Object.keys(r.storeRates).length;
+  r.storeRate=Math.round(Object.values(r.storeRates).reduce((a,n)=>a+(Number(n)||0),0)*10)/10;
+  renderCore();
+}
 
 /* ===================== Schedule import (their format) ===================== */
 function ensureSlot(venue,dt,cc,added){
