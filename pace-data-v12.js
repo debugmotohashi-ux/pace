@@ -10,6 +10,27 @@ const DAY_MS=86400000;
 let db=null;
 let pendingPreview=null;
 let pendingRestore=null;
+let nexusCloud=null;
+let cloudReady=false;
+let cloudWriting=false;
+let cloudTimer=null;
+
+function scheduleCloudSync(){
+  if(!cloudReady||!nexusCloud||cloudWriting)return;
+  clearTimeout(cloudTimer);
+  cloudTimer=setTimeout(async()=>{
+    try{
+      cloudWriting=true;
+      const payload=await collectBackupData();
+      await nexusCloud.save(payload);
+    }catch(e){
+      console.error('PACE Nexus sync failed',e);
+      if(nexusCloud&&nexusCloud.setStatus)nexusCloud.setStatus('同期エラー・端末内保存','warn');
+    }finally{
+      cloudWriting=false;
+    }
+  },500);
+}
 
 function uid(prefix){
   const id=(root.crypto&&root.crypto.randomUUID)?root.crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2);
@@ -274,10 +295,10 @@ function dbAll(store){
   return new Promise((resolve,reject)=>{const r=db.transaction(store,'readonly').objectStore(store).getAll();r.onsuccess=()=>resolve(r.result||[]);r.onerror=()=>reject(r.error);});
 }
 function dbPut(store,value){
-  return new Promise((resolve,reject)=>{const tx=db.transaction(store,'readwrite');tx.objectStore(store).put(value);tx.oncomplete=()=>resolve(value);tx.onerror=()=>reject(tx.error);});
+  return new Promise((resolve,reject)=>{const tx=db.transaction(store,'readwrite');tx.objectStore(store).put(value);tx.oncomplete=()=>{scheduleCloudSync();resolve(value);};tx.onerror=()=>reject(tx.error);});
 }
 function dbDelete(store,key){
-  return new Promise((resolve,reject)=>{const tx=db.transaction(store,'readwrite');tx.objectStore(store).delete(key);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});
+  return new Promise((resolve,reject)=>{const tx=db.transaction(store,'readwrite');tx.objectStore(store).delete(key);tx.oncomplete=()=>{scheduleCloudSync();resolve();};tx.onerror=()=>reject(tx.error);});
 }
 async function audit(action,target,reason,details){
   if(!db)return;
@@ -754,8 +775,8 @@ async function counts(){
 async function renderDataManager(){
   if(!db)return;const c=await counts(),el=document.getElementById('dbStatus');
   if(el)el.innerHTML='<div class="stats">'+
-    `<div class="stat"><div class="k">保存方式</div><div class="v" style="font-size:16px">端末内DB</div></div>`+
-    `<div class="stat"><div class="k">外部送信</div><div class="v" style="font-size:16px">なし</div></div>`+
+    `<div class="stat"><div class="k">保存方式</div><div class="v" style="font-size:16px">${cloudReady?'Nexus DB':'端末内DB'}</div></div>`+
+    `<div class="stat"><div class="k">端末保存</div><div class="v" style="font-size:16px">同期用キャッシュ</div></div>`+
     `<div class="stat"><div class="k">報告履歴</div><div class="v num">${c.reports}<small>件</small></div></div>`+
     `<div class="stat"><div class="k">名称マスタ</div><div class="v num">${c.masters}<small>件</small></div></div></div>`;
   await renderRateAnalysis();await renderAudit();
@@ -841,9 +862,27 @@ async function executeRestore(){
 async function boot(){
   try{
     db=await openDb();
-    const stored=await dbGet('core','state');
+    let stored=await dbGet('core','state');
     if(stored&&stored.value)D=normalize(stored.value);
     else await dbPut('core',{key:'state',value:denormalize(D),updatedAt:now(),schemaVersion:SCHEMA_VERSION,migratedFrom:'pace_state_v2'});
+    if(root.NexusCloud&&root.NexusCloud.connect){
+      nexusCloud=await root.NexusCloud.connect('pace');
+      if(nexusCloud){
+        const remote=await nexusCloud.load();
+        if(remote&&remote.state&&remote.state.format==='PACE_BACKUP_DATA'&&remote.state.data){
+          cloudWriting=true;
+          await replaceDatabase(remote.state.data);
+          cloudWriting=false;
+          stored=await dbGet('core','state');
+          if(stored&&stored.value)D=normalize(stored.value);
+        }else{
+          cloudWriting=true;
+          await nexusCloud.save(await collectBackupData());
+          cloudWriting=false;
+        }
+        cloudReady=true;
+      }
+    }
     const oldSave=save;
     save=function(){
       if(db)dbPut('core',{key:'state',value:denormalize(D),updatedAt:now(),schemaVersion:SCHEMA_VERSION}).catch(()=>{});
@@ -852,6 +891,7 @@ async function boot(){
     try{localStorage.removeItem('pace_state_v2');}catch(_){}
     await seedMasters();
     fillSettings();renderAll();await renderHistory();
+    scheduleCloudSync();
   }catch(e){
     console.error('PACE Ver1.2 data layer failed',e);
     const el=document.getElementById('dbStatus');if(el)el.innerHTML='<p class="note bad">端末内DBを開けませんでした。ブラウザのプライベートモードや保存設定を確認してください。</p>';
