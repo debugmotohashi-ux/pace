@@ -847,10 +847,8 @@ async function replaceDatabase(data){
   });
 }
 async function executeRestore(){
-  if(!pendingRestore)return;if(!confirm('現在のデータを自動退避して、バックアップ内容へ置き換えます。実行しますか？'))return;
+  if(!pendingRestore)return;if(!confirm('現在のデータをバックアップ内容へ置き換えます。実行しますか？'))return;
   try{
-    const stamp=now().replace(/[-:T]/g,'').slice(0,12);
-    await createBackupFile(pendingRestore.password,`PACE_pre_restore_${stamp}.pacebackup`);
     await replaceDatabase(pendingRestore.payload.data);
     const core=await dbGet('core','state');if(!core||!core.value)throw new Error('復元データにPACE本体設定がありません');
     D=normalize(core.value);fillSettings();renderAll();await audit('backup_restore','database','暗号化バックアップから復元',{fileName:pendingRestore.fileName,backupDate:pendingRestore.payload.exportedAt});
