@@ -5,6 +5,7 @@
   var SUPABASE_PUBLISHABLE_KEY =
     "sb_publishable_Dl0Nvph_kihEm5ynnmZCEw_NoKFU2lU";
   var WORKSPACE_ID = "00000000-0000-0000-0000-000000000001";
+  var NEXUS_ORIGIN = "https://nexus-ver2.aile-01.chatgpt.site";
   var client = null;
   var session = null;
   var statusEl = null;
@@ -70,6 +71,50 @@
     });
   }
 
+  function requestNexusSession() {
+    if (root.parent === root) return Promise.resolve(false);
+    return new Promise(function (resolve) {
+      var settled = false;
+      var timer = null;
+      function finish(value) {
+        if (settled) return;
+        settled = true;
+        root.removeEventListener("message", receive);
+        if (timer) root.clearTimeout(timer);
+        resolve(value);
+      }
+      function receive(event) {
+        var data = event.data || {};
+        if (
+          event.origin !== NEXUS_ORIGIN ||
+          data.type !== "NEXUS_SESSION" ||
+          !data.accessToken ||
+          !data.refreshToken
+        ) {
+          return;
+        }
+        client.auth
+          .setSession({
+            access_token: data.accessToken,
+            refresh_token: data.refreshToken,
+          })
+          .then(function (result) {
+            if (result.error) throw result.error;
+            session = result.data.session;
+            finish(Boolean(session));
+          })
+          .catch(function () {
+            finish(false);
+          });
+      }
+      root.addEventListener("message", receive);
+      root.parent.postMessage({ type: "NEXUS_SESSION_REQUEST" }, NEXUS_ORIGIN);
+      timer = root.setTimeout(function () {
+        finish(false);
+      }, 2500);
+    });
+  }
+
   async function connect(appCode) {
     if (!root.supabase || !root.supabase.createClient) {
       setStatus("端末内保存", "warn");
@@ -91,6 +136,7 @@
     try {
       var result = await client.auth.getSession();
       session = result.data.session;
+      if (!session) await requestNexusSession();
       if (!session && !(await showLogin())) {
         setStatus("端末内保存", "warn");
         return null;
