@@ -866,21 +866,28 @@ async function boot(){
     if(stored&&stored.value)D=normalize(stored.value);
     else await dbPut('core',{key:'state',value:denormalize(D),updatedAt:now(),schemaVersion:SCHEMA_VERSION,migratedFrom:'pace_state_v2'});
     if(root.NexusCloud&&root.NexusCloud.connect){
-      nexusCloud=await root.NexusCloud.connect('pace');
-      if(nexusCloud){
-        const remote=await nexusCloud.load();
-        if(remote&&remote.state&&remote.state.format==='PACE_BACKUP_DATA'&&remote.state.data){
-          cloudWriting=true;
-          await replaceDatabase(remote.state.data);
-          cloudWriting=false;
-          stored=await dbGet('core','state');
-          if(stored&&stored.value)D=normalize(stored.value);
-        }else{
-          cloudWriting=true;
-          await nexusCloud.save(await collectBackupData());
-          cloudWriting=false;
+      try{
+        nexusCloud=await root.NexusCloud.connect('pace');
+        if(nexusCloud){
+          try{
+            const remote=await nexusCloud.load();
+            cloudWriting=true;
+            if(remote&&remote.state&&remote.state.format==='PACE_BACKUP_DATA'&&remote.state.data){
+              await replaceDatabase(remote.state.data);
+              stored=await dbGet('core','state');
+              if(stored&&stored.value)D=normalize(stored.value);
+            }else{
+              await nexusCloud.save(await collectBackupData());
+            }
+            cloudReady=true;
+          }finally{
+            cloudWriting=false;
+          }
         }
-        cloudReady=true;
+      }catch(e){
+        cloudReady=false;
+        console.error('PACE Nexus initial sync failed; using local cache',e);
+        if(nexusCloud&&nexusCloud.setStatus)nexusCloud.setStatus('同期エラー・端末内保存','warn');
       }
     }
     const oldSave=save;
