@@ -143,6 +143,8 @@
   details summary{cursor:pointer;font-size:12px;color:var(--muted);font-weight:600}
   @media (max-width:420px){ .delta .big{font-size:40px} .stat .v{font-size:20px} }
   @media (prefers-reduced-motion:reduce){ .seg{transition:none} .toast{transition:none} }
+  body.nexus-embedded .nexus-standalone-link{display:none}
+  body.nexus-embedded header.console{padding-top:12px}
   .vedit{border:1px solid var(--line2);border-radius:10px;padding:10px;margin-bottom:8px}
   .vhead{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}
   .vhead select{width:auto;padding:5px 8px;font-size:12px}
@@ -180,6 +182,11 @@
 </style>
 </head>
 <body>
+<script>
+if(new URLSearchParams(location.search).get('nexusEmbed')==='1'){
+  document.body.classList.add('nexus-embedded');
+}
+</script>
 
 <header class="console">
   <div class="max">
@@ -187,7 +194,7 @@
       <h1>PACE</h1>
       <span class="sub">日次目標・着地見込み</span>
       <span class="month num" id="hMonth">—</span>
-      <a href="https://nexus-ver2.aile-01.chatgpt.site" style="margin-left:auto;color:#cdd8e6;font-size:11px;font-weight:700;text-decoration:none">← Nexus</a>
+      <a class="nexus-standalone-link" href="https://nexus-ver2.aile-01.chatgpt.site" style="margin-left:auto;color:#cdd8e6;font-size:11px;font-weight:700;text-decoration:none">← Nexus</a>
     </div>
     <div class="scen">
       <div class="scol">
@@ -484,7 +491,7 @@
         <div style="display:flex;align-items:flex-end"><button class="btn sec block" onclick="PACEV12.previewRestore()">復元内容を確認</button></div>
       </div>
       <div id="restorePreview"></div>
-      <button id="restoreExecute" class="btn ok block hidden" onclick="PACEV12.executeRestore()">現在データを退避して復元する</button>
+      <button id="restoreExecute" class="btn ok block hidden" onclick="PACEV12.executeRestore()">バックアップ内容へ復元する</button>
     </div>
     <div class="card">
       <h2>監査ログ <span class="tag">修正者：本橋</span></h2>
